@@ -475,7 +475,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="44"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="34"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <!-- slow glows drifting behind the pages (Settings > Appearance turns them off) -->
@@ -546,7 +546,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Animated effects" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="The soft light that follows your mouse over cards, cards rising in, and the slow glow behind the pages. Turn off for a completely still app."
+                                <TextBlock Text="The soft light that follows your mouse over cards, cards rising in, and the glow behind the pages. Turn off for a completely still app."
                                            FontSize="12.5" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <CheckBox x:Name="EffectsCheck" Grid.Column="1" Style="{StaticResource TsCheck}" VerticalAlignment="Center" Margin="20,0,0,0"
@@ -573,27 +573,27 @@
                             CornerRadius="14" Padding="20,16">
                         <StackPanel>
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,20,0">
-                                    <TextBlock x:Name="UpdVersion" FontSize="15" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="UpdStatus" FontSize="12.5" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" TextWrapping="Wrap"
-                                               Text="Checks the releases of the GitHub repository below."/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <!-- GitHub mark: drop the official PNG into Assets\Brand\github.png and it is shown here -->
+                                <Border Width="40" Height="40" CornerRadius="12" Background="#1A1A21" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <Grid>
+                                        <Image x:Name="GitHubMark" Width="24" Height="24" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        <TextBlock x:Name="GitHubGlyph" Text="&#xE895;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                                   Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="App updates" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="UpdStatus" FontSize="12.5" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+                                               Text="Checks GitHub for a newer release."/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button x:Name="UpdCheck" Style="{StaticResource MiniButton}" Content="Check for updates" Click="OnCheckUpdate"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="UpdCheck" Style="{StaticResource GhostButton}" Content="Check for updates" Click="OnCheckUpdate"/>
                                     <Button x:Name="UpdInstall" Style="{StaticResource PrimaryButton}" Content="Update now" Margin="10,0,0,0"
                                             Visibility="Collapsed" Click="OnInstallUpdate"/>
                                 </StackPanel>
                             </Grid>
                             <ProgressBar x:Name="UpdBar" Style="{StaticResource ThinBar}" Height="6" Margin="0,14,0,0" Visibility="Collapsed"/>
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Updates come from" FontSize="12.5" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <TextBox x:Name="UpdRepo" Grid.Column="1" Padding="8,7" Background="#0F0F13" Foreground="{StaticResource TextBrush}"
-                                         BorderBrush="{StaticResource BorderBrushSoft}" CaretBrush="White" LostFocus="OnUpdRepoChanged"/>
-                                <TextBlock Grid.Column="2" Text="owner/name on GitHub" FontSize="12" Foreground="{StaticResource FaintBrush}"
-                                           VerticalAlignment="Center" Margin="12,0,0,0"/>
-                            </Grid>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -611,7 +611,7 @@
                             </Ellipse>
                             <Image Source="Assets/logo.png" Margin="6" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Grid>
-                        <TextBlock Text="Welcome to TrapShack" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,20,0,0"/>
+                        <TextBlock Text="Welcome to JS Tweak Utility" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,20,0,0"/>
                         <TextBlock x:Name="HomeSub" FontSize="13" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" TextAlignment="Center"
                                    TextWrapping="Wrap" Margin="0,6,0,0"/>
 
@@ -631,6 +631,26 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+                        <!-- PC Cleaner: how much space a clean would free (measured quietly after startup) -->
+                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="1" CornerRadius="16"
+                                Padding="22,16" Margin="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xEA99;" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="HomeCleanSize" Text="…" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}"/>
+                                        <TextBlock Text=" can be freed" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="HomeCleanText" Text="Checking temporary files and caches…" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Button Grid.Column="2" Style="{StaticResource GhostButton}" Content="Clean now" VerticalAlignment="Center" Margin="12,0,0,0" Click="OnHomeClean"/>
+                            </Grid>
+                        </Border>
+
                         <Button Style="{StaticResource MiniButton}" Content="Undo everything TrapShack changed" HorizontalAlignment="Center" Margin="0,16,0,0"
                                 Click="OnUndoAll" Opacity="0.85"/>
                     </StackPanel>
@@ -667,7 +687,7 @@
                                     </DataTemplate>
                                 </GroupStyle.HeaderTemplate>
                                 <GroupStyle.Panel>
-                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="250" Gap="10"/></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="250" Gap="10" RowHeight="108"/></ItemsPanelTemplate>
                                 </GroupStyle.Panel>
                             </GroupStyle>
                         </ItemsControl.GroupStyle>
@@ -909,7 +929,7 @@
                                     </Style>
                                 </GroupStyle.ContainerStyle>
                                 <GroupStyle.Panel>
-                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="250" Gap="10"/></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="250" Gap="10" RowHeight="108"/></ItemsPanelTemplate>
                                 </GroupStyle.Panel>
                             </GroupStyle>
                         </ItemsControl.GroupStyle>
@@ -920,6 +940,7 @@
             <ui:AppsPage x:Name="AppsPanel" Grid.Row="1" Visibility="Collapsed"/>
             <ui:DebloatAppsPage x:Name="DebloatAppsPanel" Grid.Row="1" Visibility="Collapsed"/>
             <ui:CleanerPage x:Name="CleanerPanel" Grid.Row="1" Visibility="Collapsed"/>
+            <ui:UtilitiesPage x:Name="UtilitiesPanel" Grid.Row="1" Visibility="Collapsed"/>
 
             <!-- ============ QUICK ACTIONS MENU (one menu, shared by every page that has the button) ============ -->
             <Popup x:Name="QuickPop" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6">
@@ -966,7 +987,7 @@
             </Popup>
 
                         <!-- ============ STATUS BAR ============ -->
-            <Border Grid.Row="2" BorderBrush="#17171C" BorderThickness="0,1,0,0" Background="#09090C">
+            <Border x:Name="StatusBar" Grid.Row="2" Height="34" Visibility="Collapsed" BorderBrush="#17171C" BorderThickness="0,1,0,0" Background="#09090C">
                 <Grid Margin="40,0">
                     <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12"
                                Foreground="{StaticResource MutedBrush}"/>

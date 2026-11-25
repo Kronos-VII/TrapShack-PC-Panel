@@ -87,7 +87,7 @@ public static partial class Catalog
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Google\Chrome", @"VoiceTypingSettings", 2, RegistryValueKind.DWord, null))),
         Mk("rd.bing-search", Category.Debloat, "", @"Bing and Copilot in Windows Search off", @"Search in the Start menu only looks at this PC: no web results and no Copilot answers.",
             Always, L(
-                new RegistryAction(RegistryHive.CurrentUser, @"Software\Policies\Microsoft\Windows\Explorer", @"DisableSearchBoxSuggestions", 1, RegistryValueKind.DWord, 0),
+                new RegistryAction(RegistryHive.CurrentUser, @"Software\Policies\Microsoft\Windows\Explorer", @"DisableSearchBoxSuggestions", 1, RegistryValueKind.DWord, null),
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", @"AllowCortana", 0, RegistryValueKind.DWord, null),
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", @"CortanaConsent", 0, RegistryValueKind.DWord, null))),
         Mk("rd.start-all-apps", Category.Debloat, "", @"Hide ""All apps"" in Start", @"Removes the All apps list from the Start menu. Apps stay installed; you find them by searching.",
@@ -112,8 +112,8 @@ public static partial class Catalog
                 new RegistryAction(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Power", @"HiberbootEnabled", 0, RegistryValueKind.DWord, 1))),
         Mk("rd.standby-network", Category.Debloat, "", @"No network while asleep", @"Stops laptops that use Modern Standby from staying online (and draining battery) while asleep.",
             s => s.IsLaptop ? Verdict.Rec() : Verdict.Opt("Only matters on laptops and tablets that use Modern Standby."), L(
-                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9", @"ACSettingIndex", 0, RegistryValueKind.DWord, 1),
-                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9", @"DCSettingIndex", 0, RegistryValueKind.DWord, 1))),
+                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9", @"ACSettingIndex", 0, RegistryValueKind.DWord, null),
+                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9", @"DCSettingIndex", 0, RegistryValueKind.DWord, null))),
         Mk("rd.snap-assist", Category.Debloat, "", @"No app suggestions when snapping", @"Snapping a window no longer fills the rest of the screen with suggested windows.",
             s => W11(s, Verdict.Opt()), L(
                 new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", @"SnapAssist", 0, RegistryValueKind.DWord, 1))),
@@ -232,16 +232,13 @@ public static partial class Catalog
                 new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer", @"ShowDriveLettersFirst", 2, RegistryValueKind.DWord, 0)))),
         Choice(@"All apps view in Start", @"By category (default)", Mk("rd.choice.all-apps-view-in-start.by-category-default", Category.Debloat, "", @"All apps view in Start: By category (default)", @"All apps view in Start: By category (default).",
             s => s.Build >= 26200 ? Verdict.Opt() : Verdict.No("Needs a newer version of Windows 11."), L(
-                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 0, RegistryValueKind.DWord, null),
-                new RegistryDeleteAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer", @"NoStartMenuMorePrograms", RegistryValueKind.DWord, null)))),
+                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 0, RegistryValueKind.DWord, null)))),
         Choice(@"All apps view in Start", @"Grid", Mk("rd.choice.all-apps-view-in-start.grid", Category.Debloat, "", @"All apps view in Start: Grid", @"All apps view in Start: Grid.",
             s => s.Build >= 26200 ? Verdict.Opt() : Verdict.No("Needs a newer version of Windows 11."), L(
-                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 1, RegistryValueKind.DWord, null),
-                new RegistryDeleteAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer", @"NoStartMenuMorePrograms", RegistryValueKind.DWord, null)))),
+                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 1, RegistryValueKind.DWord, null)))),
         Choice(@"All apps view in Start", @"List", Mk("rd.choice.all-apps-view-in-start.list", Category.Debloat, "", @"All apps view in Start: List", @"All apps view in Start: List.",
             s => s.Build >= 26200 ? Verdict.Opt() : Verdict.No("Needs a newer version of Windows 11."), L(
-                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 2, RegistryValueKind.DWord, null),
-                new RegistryDeleteAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer", @"NoStartMenuMorePrograms", RegistryValueKind.DWord, null)))),
+                new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Start", @"AllAppsViewMode", 2, RegistryValueKind.DWord, null)))),
     };
 
     static Tweak Choice(string group, string label, Tweak t) { t.ChoiceGroup = group; t.ChoiceLabel = label; return t; }

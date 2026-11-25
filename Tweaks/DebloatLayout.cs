@@ -16,7 +16,7 @@ public static partial class Catalog
             "extra.telemetry", "extra.activity", "rd.suggestions", "rd.lockscreen-tips", "extra.location", "rd.find-my-device",
             "extra.tweaksconsumerfeatures", "clean.lockscreen",
         }),
-        ("Windows AI", "\uE945", new[]
+        ("Windows AI", "\uE794", new[]
         {
             "ai.copilot", "ai.copilot-app", "ai.recall-policy", "ai.recall-feature", "rd.click-to-do", "rd.ai-service",
             "ai.notepad", "rd.paint-ai", "ai.hide-settings-page", "rd.chrome-ai",
@@ -26,7 +26,7 @@ public static partial class Catalog
             "rd.bing-search", "extra.togglebingsearch", "clean.store-search", "clean.start-recommended", "rd.start-phone-link",
             "rd.start-all-apps", "extra.revert-start-menu", "extra.togglehidesettingshome", "@All apps view in Start",
         }),
-        ("Taskbar", "\uE90C", new[]
+        ("Taskbar", "\uE75B", new[]
         {
             "clean.widgets", "rd.hide-chat", "custom.taskview", "custom.taskbar-left", "essential.end-task", "rd.last-active-click",
             "extra.togglebatterypercentage", "@Taskbar search", "@Combine taskbar buttons", "@Combine buttons on other screens", "@Show taskbar apps on",
@@ -65,13 +65,13 @@ public static partial class Catalog
             "browsers.edge-debloat", "rd.edge-ads", "browsers.edge-remove", "browsers.brave-debloat", "clean.new-outlook", "debloat.onedrive",
             "clean.razer-block", "clean.logi-block",
         }),
-        ("Network", "\uE968", new[]
+        ("Network", "\uE701", new[]
         {
             "network.prefer-ipv4", "advanced.teredo", "advanced.disable-ipv6",
         }),
         ("Clean up", "\uE74D", new[]
         {
-            "extra.disk-cleanup", "extra.delete-temp", "clean.oosu",
+            "extra.disk-cleanup", "extra.delete-temp",
         }),
     };
 

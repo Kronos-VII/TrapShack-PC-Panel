@@ -8,7 +8,7 @@ namespace TrapShack.Core;
 
 public sealed record UpdateInfo(Version Latest, string Tag, string DownloadUrl, string Notes);
 
-/// <summary>Checks GitHub releases for a newer TrapShackTweakUtility.exe and swaps it in with a small helper script.</summary>
+/// <summary>Checks GitHub releases for a newer TrapShack Tweak Utility.exe and swaps it in with a small helper script.</summary>
 public static class Updater
 {
     static readonly HttpClient Http = Make();
@@ -89,8 +89,8 @@ public static class Updater
     public static void StartSwap(string newFile)
     {
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot find the running program.");
-        if (!exe.EndsWith("TrapShackTweakUtility.exe", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Updating only works from the built TrapShackTweakUtility.exe, not from a development run.");
+        if (exe.Contains(@"\bin\", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Updating only works from the finished program in the dist folder, not from a development run.");
         var bat = Path.Combine(Path.GetTempPath(), "TrapShackUpdate", "swap.bat");
         File.WriteAllText(bat,
             "@echo off\r\n" +

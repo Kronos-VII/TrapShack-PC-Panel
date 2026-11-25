@@ -164,7 +164,7 @@ public sealed class PairCardVM : Notify
     {
         X64 = x64; X86 = x86;
         Title = Regex.Replace(x64.Name, @"\s*\((x64|x86)\)\s*$", "");
-        Art = new TileArt("pair:" + Title, Title, "C++");
+        Art = new TileArt(x64.Id, Title, "C++");
         x64.PropertyChanged += (_, _) => Raise(nameof(AllInstalled));
         x86.PropertyChanged += (_, _) => Raise(nameof(AllInstalled));
     }
@@ -206,6 +206,28 @@ public sealed class WinAppVM : Notify
 
     /// <summary>Icon character (Segoe Fluent Icons) and the tile colour behind it.</summary>
     public string Glyph { get; }
+
+    static readonly Brush PhotoTile = Frozen(Color.FromRgb(0x1D, 0x1D, 0x24));
+    static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+
+    ImageSource? _photo;
+    /// <summary>The app's own icon, read from its package folder on this PC. Null until found (the tile shows the icon character meanwhile).</summary>
+    public ImageSource? Photo
+    {
+        get => _photo;
+        set { if (Set(ref _photo, value)) { Raise(nameof(HasPhoto)); Raise(nameof(NoPhoto)); Raise(nameof(TileBg)); } }
+    }
+    TileArt? _art;
+    /// <summary>The same brand logo the Apps page uses, for apps that are on both pages (Spotify, Teams ...). Wins over the package icon.</summary>
+    public TileArt? Art
+    {
+        get => _art;
+        set { if (Set(ref _art, value)) { Raise(nameof(HasPhoto)); Raise(nameof(NoPhoto)); Raise(nameof(TileBg)); Raise(nameof(HasArt)); } }
+    }
+    public Visibility HasArt => _art != null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility HasPhoto => _photo != null && _art == null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility NoPhoto => _photo == null && _art == null ? Visibility.Visible : Visibility.Collapsed;
+    public Brush TileBg => _art != null ? Brushes.Transparent : _photo != null ? PhotoTile : Tile;
     public Brush Tile { get; }
     public Brush GlyphFg { get; }
     /// <summary>The little label under the tick box is only shown when it matters: core apps, apps that can't come back, locked apps.</summary>
@@ -288,18 +310,18 @@ public static class WinAppArt
         ["app-clipchamp-clipchamp"] = ("\uE714", "#6E3EC1"),
         ["app-microsoft-windowsmaps"] = ("\uE707", "#1F8A70"),
         ["app-microsoft-windowsterminal"] = ("\uE756", "#2B2B33"),
-        ["app-microsoft-windowsfeedbackhub"] = ("\uE897", "#8A4B2F"),
-        ["app-microsoft-windows-photos"] = ("\uE91B", "#0F6CBD"),
-        ["app-microsoft-paint"] = ("\uE790", "#3B7DD8"),
-        ["app-microsoft-mspaint"] = ("\uE790", "#7A3BD8"),
+        ["app-microsoft-windowsfeedbackhub"] = ("\uE946", "#8A4B2F"),
+        ["app-microsoft-windows-photos"] = ("\uE8B9", "#0F6CBD"),
+        ["app-microsoft-paint"] = ("\uE70F", "#3B7DD8"),
+        ["app-microsoft-mspaint"] = ("\uE70F", "#7A3BD8"),
         ["app-microsoft-screensketch"] = ("\uE70F", "#0F6CBD"),
         ["app-microsoft-windowsnotepad"] = ("\uE70F", "#2F8AB5"),
         ["app-microsoft-microsoftstickynotes"] = ("\uE70B", "#B8941F"),
         ["app-microsoft-todos"] = ("\uE73E", "#2564CF"),
-        ["app-microsoft-getstarted"] = ("\uE82F", "#B87A1F"),
-        ["app-microsoft-gethelp"] = ("\uE897", "#2F6D8A"),
+        ["app-microsoft-getstarted"] = ("\uE946", "#B87A1F"),
+        ["app-microsoft-gethelp"] = ("\uE946", "#2F6D8A"),
         ["app-microsoft-yourphone"] = ("\uE717", "#0F6CBD"),
-        ["app-microsoftcorporationii-quickassist"] = ("\uE9CE", "#0F6CBD"),
+        ["app-microsoftcorporationii-quickassist"] = ("\uE77B", "#0F6CBD"),
         ["app-microsoft-windowscommunicationsapps"] = ("\uE715", "#0F6CBD"),
         ["app-microsoft-outlookforwindows"] = ("\uE715", "#0A64AD"),
         ["app-microsoft-skypeapp"] = ("\uE717", "#00A0D8"),
@@ -316,13 +338,13 @@ public static class WinAppArt
         ["app-microsoft-xboxidentityprovider"] = ("\uE77B", "#107C10"),
         ["app-microsoft-xbox-tcui"] = ("\uE7FC", "#107C10"),
         ["app-microsoft-windowsstore"] = ("\uE719", "#0F6CBD"),
-        ["app-microsoft-desktopappinstaller"] = ("\uE896", "#0F6CBD"),
+        ["app-microsoft-desktopappinstaller"] = ("\uE719", "#0F6CBD"),
         ["app-microsoft-zunemusic"] = ("\uE768", "#C4401F"),
         ["app-microsoft-zunevideo"] = ("\uE714", "#7A2FB5"),
         ["app-microsoft-windowssoundrecorder"] = ("\uE720", "#8A2F3B"),
         ["app-microsoft-bingsearch"] = ("\uE721", "#0F6CBD"),
-        ["app-microsoft-bingnews"] = ("\uE8F2", "#8A2F3B"),
-        ["app-microsoft-bingweather"] = ("\uE9CA", "#2F6DB5"),
+        ["app-microsoft-bingnews"] = ("\uE8A5", "#8A2F3B"),
+        ["app-microsoft-bingweather"] = ("\uE706", "#2F6DB5"),
         ["app-microsoft-549981c3f5f10"] = ("\uE720", "#2F6DB5"),
         ["app-microsoft-microsoft3dviewer"] = ("\uE71D", "#6B3FA0"),
         ["app-microsoft-mixedreality-portal"] = ("\uE71D", "#6B3FA0"),
@@ -342,12 +364,12 @@ public static class WinAppArt
         (new[] { "netflix", "hulu", "primevideo", "disney.", "slingtv", "spotify", "pandora", "iheart", "tunein", "acgmediaplayer", "cyberlink" }, "\uE768", "#8A2F3B"),
         (new[] { "candycrush", "bubblewitch", "asphalt", "farmville", "hiddencity", "marchofempires", "royalrevolt", "cookingfever", "caesars", "disneymagic", "nytcrossword" }, "\uE7FC", "#2F7A4B"),
         (new[] { "facebook", "instagram", "tiktok", "linkedin", "flipboard" }, "\uE716", "#2564CF"),
-        (new[] { "photoshop", "picsart", "polarr", "phototastic", "sketchbook", "drawboard" }, "\uE91B", "#6E3EC1"),
+        (new[] { "photoshop", "picsart", "polarr", "phototastic", "sketchbook", "drawboard" }, "\uE8B9", "#6E3EC1"),
         (new[] { "copilot", "aihub" }, "\uE945", "#5B4BB5"),
         (new[] { "teams", "messaging", "oneconnect" }, "\uE8BD", "#5059C9"),
         (new[] { "whiteboard", "journal", "sway", "onecalendar" }, "\uE70F", "#2F6D8A"),
         (new[] { "widgets", "webexperience", "startexperiences" }, "\uE71D", "#2F6DB5"),
-        (new[] { "remotedesktop", "windows365", "crossdevice", "glidex", "quickshare", "multicontrol", "secondscreen", "flux" }, "\uE7F4", "#2F6D8A"),
+        (new[] { "remotedesktop", "windows365", "crossdevice", "glidex", "quickshare", "multicontrol", "secondscreen", "flux" }, "\uE772", "#2F6D8A"),
         (new[] { "amazon.com", "winzip", "duolingo", "actipro" }, "\uE719", "#B87A1F"),
     };
 
@@ -357,7 +379,7 @@ public static class WinAppArt
         var key = d.Appx.ToLowerInvariant();
         foreach (var k in Kinds)
             if (k.Words.Any(w => key.Contains(w))) return (k.Glyph, k.Hex);
-        if (d.Group == "PC maker apps") return ("\uE7F8", "#3A4A5C");
+        if (d.Group == "PC maker apps") return ("\uE772", "#3A4A5C");
         var hex = GroupHex.TryGetValue(d.Group, out var g) ? g : "#3A4A5C";
         var glyph = d.Group.Equals("AI", StringComparison.OrdinalIgnoreCase) ? "\uE945" : "\uE71D";
         return (glyph, hex);

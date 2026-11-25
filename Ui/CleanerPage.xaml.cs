@@ -194,9 +194,20 @@ public partial class CleanerPage : UserControl
     }
 
     // ------------------------------------------------------------------------------------------ scan
+    /// <summary>Raised after a scan or clean finishes, with the size that can still be freed.</summary>
+    public event Action<long>? Measured;
+    public bool Busy => _working;
+
     async void OnScanClick(object sender, RoutedEventArgs e)
     {
         if (_working) { _cts?.Cancel(); return; }
+        await ScanAsync();
+    }
+
+    /// <summary>Scans every ticked rule (reads only). Also used quietly after startup for the Home page's figure.</summary>
+    public async Task ScanAsync()
+    {
+        if (_working) return;
         if (!_loaded) { await LoadAsync(); if (!_loaded) return; }
         var queue = Ticked.ToList();
         if (queue.Count == 0) { StateTitle.Text = "Nothing is ticked"; StateLine.Text = "Tick at least one rule, or press “Tick the safe ones”."; return; }
@@ -230,6 +241,7 @@ public partial class CleanerPage : UserControl
                 ? $"{found} rules found something. Untick anything you want to keep, then press Clean. Close your browsers first for a full clean."
                 : "Nothing to clean right now.";
             BigLabel.Text = "found";
+            Measured?.Invoke(total);
         }
         catch (OperationCanceledException)
         {
@@ -307,6 +319,7 @@ public partial class CleanerPage : UserControl
             BigLabel.Text = "freed";
             CleanBtn.IsEnabled = false;
             AnimateArc(1);
+            Measured?.Invoke(0);
         }
     }
 

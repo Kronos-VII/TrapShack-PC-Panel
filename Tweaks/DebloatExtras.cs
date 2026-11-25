@@ -63,7 +63,7 @@ public static partial class Catalog
             "Logon Screen Acrylic Blur",
             "Toggles the acrylic blur effect on login screen background.",
             Sometimes,
-            L(new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Policies\\Microsoft\\Windows\\System", "DisableAcrylicBackgroundOnLogon", 1, RegistryValueKind.DWord, 0)),
+            L(new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Policies\\Microsoft\\Windows\\System", "DisableAcrylicBackgroundOnLogon", 1, RegistryValueKind.DWord, null)),
             detail: "Toggles the acrylic blur effect on login screen background.");
 
         yield return Mk("extra.togglehidesettingshome", Category.Customize, "Settings app",
@@ -84,7 +84,7 @@ public static partial class Catalog
             "S0 Sleep Network Connectivity",
             "Toggles network connectivity during S0 Sleep which is low power idle in modern laptops.",
             Sometimes,
-            L(new RegistryAction(RegistryHive.CurrentUser, "SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9", "ACSettingIndex", 0, RegistryValueKind.DWord, 1)),
+            L(new RegistryAction(RegistryHive.CurrentUser, "SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9", "ACSettingIndex", 0, RegistryValueKind.DWord, null)),
             detail: "Toggles network connectivity during S0 Sleep which is low power idle in modern laptops.");
     }
 }

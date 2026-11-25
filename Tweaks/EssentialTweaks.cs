@@ -69,7 +69,7 @@ public static partial class Catalog
             "Disable Teredo tunnelling",
             "Switches off Teredo, an IPv6-over-IPv4 tunnel.",
             s => Verdict.Warn("Xbox and some peer-to-peer games use Teredo for party chat and matchmaking. Leave this off if you play those."),
-            L(LM(@"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents", 1, 0),
+            L(LM(@"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents", 1),
               new CustomAction(
                   "Run netsh interface teredo set state disabled (restore sets it back to default)",
                   isApplied: () => RegUtil.ReadInt(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents") == 1,

@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
-title TrapShack - push to GitHub
+title TrapShack Tweak Utility - push to GitHub
 set "REPO=https://github.com/Kronos-VII/TrapShack-PC-Panel.git"
 
 where git >nul 2>&1
@@ -48,24 +48,9 @@ if errorlevel 1 (
   pause & exit /b 1
 )
 
-REM ---- optional: publish a release so the in-app Update button can find it ----
-if exist "dist\TrapShackTweakUtility.exe" (
-  where gh >nul 2>&1
-  if not errorlevel 1 (
-    echo.
-    set "REL="
-    set /p REL=Publish dist\TrapShackTweakUtility.exe as a release for the Update button? (y/N): 
-    if /i "!REL!"=="y" (
-      for /f %%v in ('powershell -NoProfile -Command "([xml](Get-Content TrapShack.csproj)).Project.PropertyGroup.Version | Where-Object {$_} | Select-Object -First 1"') do set "VER=%%v"
-      echo Creating release v!VER! ...
-      gh release create "v!VER!" "dist\TrapShackTweakUtility.exe" --title "TrapShack v!VER!" --notes "!MSG!"
-      if errorlevel 1 echo Release was not created. If v!VER! already exists, raise ^<Version^> in TrapShack.csproj first.
-    )
-  ) else (
-    echo.
-    echo Tip: install the GitHub CLI ^(https://cli.github.com^) and push.bat can publish releases for the Update button too.
-  )
-)
+REM ---- to publish an update for the in-app "Check for updates" button, run release.bat ----
+echo.
+echo To send an update to everyone's app, double-click release.bat.
 
 echo.
 echo Done.

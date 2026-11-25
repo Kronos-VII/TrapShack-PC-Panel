@@ -156,7 +156,7 @@
                         </Button>
                         <Button x:Name="CleanBtn" Style="{StaticResource GhostButton}" MinWidth="130" Margin="10,0,0,0" IsEnabled="False" Click="OnCleanClick">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE894;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
+                                <TextBlock Text="&#xEA99;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
                                 <TextBlock x:Name="CleanText" Text="Clean"/>
                             </StackPanel>
                         </Button>

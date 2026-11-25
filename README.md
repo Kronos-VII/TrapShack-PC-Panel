@@ -5,18 +5,18 @@ proper restore, and everything recommended is chosen from what it detects on you
 
 ## Build
 Unzip into an empty folder and double-click `build.bat`. It checks for the .NET 8 SDK (offers to install it), restores packages
-(internet needed the first time), builds a single `TrapShackTweakUtility.exe` into `dist\` and opens that folder.
+(internet needed the first time), builds a single `TrapShack Tweak Utility.exe` into `dist\` and opens that folder.
 Options: `build.bat -Run`, `-Clean`, `-Debug`. If a build fails, send `build.log`.
 
 ## Pushing to GitHub
-Double-click `push.bat`. First run it sets up git here and points it at https://github.com/Kronos-VII/TrapShack-PC-Panel, then asks for a one-line description, commits and pushes. If the GitHub CLI (`gh`) is installed and `dist\TrapShackTweakUtility.exe` exists, it can also publish a release.
+Double-click `push.bat`. First run it sets up git here and points it at https://github.com/Kronos-VII/TrapShack-PC-Panel, then asks for a one-line description, commits and pushes.
 
 ## Updating the app
-Settings > Updates > Check for updates. TrapShack reads the newest GitHub release, and if its version is higher than the running one it downloads the attached .exe, closes, swaps itself and reopens. To ship an update: raise `<Version>` in `TrapShack.csproj`, run `build.bat`, then `push.bat` and answer `y` to the release question.
+Settings > Updates > Check for updates. TrapShack reads the newest GitHub release, and if its version is higher than the running one it downloads the attached .exe, closes, swaps itself and reopens. To ship an update: run `push.bat` (saves the code), then double-click `release.bat`. It raises the version number, builds, asks what changed and publishes the release. It installs and signs in to the GitHub CLI the first time.
 
 ## Layout
 ```
-Assets/    logo, icon, background art
+Assets/    logo, icon, app logos (AppLogos), cleaner rules (Cleaner), optional brand marks (Brand, e.g. github.png)
 Core/      engine: actions, apply/revert, backups (state.json), hardware detection, live sensors
 Theme/     colours, buttons, tooltips
 Tweaks/    every setting, by area (edit or add settings here)
@@ -25,6 +25,7 @@ Ui/        page list (PageDefs.cs), what "recommended" means (Recommended.cs), v
 
 ## Pages
 * **Home** (a small start page), **System info** (hardware details, live temperatures) and **Search settings**.
+* **Utilities**: Windows' own repair tools (DISM then SFC, Windows Update reset, network fixes, drive optimise, Xbox and audio fixes, reports) run in the built-in terminal, plus shortcuts to Windows tools. Edit `Core/UtilityCatalog.cs` to add more.
 * **PC Cleaner**: scans for temporary files and caches with the safe winapp2.ini rules, then cleans what you keep ticked (see Assets/Cleaner/LICENSES.txt).
 * **Settings** has a colour wheel for the accent colour; the whole app recolours as you drag.
 * **Debloat**: one page of category cards (privacy, Windows AI, Start menu, taskbar, File Explorer, system ...) with switches and drop-downs, plus **Debloat apps** and **Apps**. Edit `Tweaks/DebloatLayout.cs` to change the cards.

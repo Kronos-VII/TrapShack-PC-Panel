@@ -31,6 +31,9 @@ public sealed class TweakEngine
         Log.Info($"Apply {t.Id}");
         var touched = new List<(int Index, TweakAction Action)>();
         var ordinal = 0;
+        // Written to disk before anything changes and removed when done: if the PC or the app goes down mid-way,
+        // the next start knows which setting may be half-applied and offers to put it back.
+        State.Set(PendingKey, t.Id);
         try
         {
             for (var i = 0; i < t.Actions.Count; i++)
@@ -67,7 +70,11 @@ public sealed class TweakEngine
             }
             throw;
         }
+        finally { State.Remove(PendingKey); }
     }
+
+    /// <summary>State key holding the id of a setting that was being applied when the app last stopped.</summary>
+    public const string PendingKey = "app.pending-apply";
 
     /// <summary>Restores the original state. Returns a hint to show the user when manual steps remain.</summary>
     public string? Revert(Tweak t, Action<int>? onStep = null)

@@ -26,8 +26,8 @@ public static partial class Catalog
             "Turn off Windows Error Reporting",
             "Crash reports are no longer sent to Microsoft.",
             s => s.DomainJoined ? Verdict.Warn("Company IT teams often collect these reports. Ask before switching this off.") : Verdict.Opt(),
-            L(LM(@"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled", 1, 0),
-              CU(@"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled", 1, 0)),
+            L(LM(@"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled", 1, null),
+              CU(@"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled", 1, null)),
             detail: "You can still see crash details locally in Reliability Monitor and Event Viewer.");
 
         yield return Mk("privacy.cortana", Category.Privacy, TrackingFeedback,

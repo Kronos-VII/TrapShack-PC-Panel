@@ -46,6 +46,48 @@ public partial class DebloatAppsPage : UserControl
         catch (Exception ex) { Log.Error("Windows app scan failed: " + ex.Message); _building = false; }
         Loading.Visibility = Visibility.Collapsed;
         Refresh();
+        _ = LoadLogosAsync(_all.Where(a => a.Photo == null).ToList());
+    }
+
+    /// <summary>Reads each app's own icon from its package folder, in the background, and swaps it into the tile.</summary>
+    static async Task LoadLogosAsync(List<WinAppVM> apps)
+    {
+        foreach (var a in apps)
+        {
+            // an app that is also on the Apps page uses the same brand logo there (Spotify, Teams, WhatsApp ...)
+            var twin = AppCatalog.All.FirstOrDefault(d => SameApp(d.Name, a.Name));
+            if (twin != null)
+            {
+                var art = new TileArt(twin.Id, twin.Name);
+                if (art.Photo != null || art.HasIcon) { a.Art = art; continue; }
+            }
+            var img = await Task.Run<System.Windows.Media.ImageSource?>(() =>
+            {
+                try
+                {
+                    var file = AppxLogo.Find(Caches.AppxHome(a.Def.Appx.Split('|')));
+                    if (file == null) return null;
+                    using var fs = System.IO.File.OpenRead(file);   // read the bytes directly: works for files inside WindowsApps too
+                    var bi = new System.Windows.Media.Imaging.BitmapImage();
+                    bi.BeginInit();
+                    bi.StreamSource = fs;
+                    bi.DecodePixelWidth = 64;
+                    bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bi.EndInit();
+                    bi.Freeze();
+                    return (System.Windows.Media.ImageSource)bi;
+                }
+                catch { return null; }
+            });
+            if (img != null) a.Photo = img;
+        }
+    }
+
+    static bool SameApp(string catalogName, string winName)
+    {
+        static string N(string s) => new string(s.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        var c = N(catalogName); var w = N(winName);
+        return c.Length > 3 && (c == w || w.StartsWith(c) || c.StartsWith(w) && w.Length > 5);
     }
 
     void OnChanged(WinAppVM vm) { if (!_building) UpdateStats(); }

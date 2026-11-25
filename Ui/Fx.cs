@@ -24,73 +24,91 @@ public static class Fx
     public static void SetGlow(DependencyObject d, bool v) => d.SetValue(GlowProperty, v);
     public static bool GetGlow(DependencyObject d) => (bool)d.GetValue(GlowProperty);
 
-    static readonly DependencyProperty GlowRectProperty =
-        DependencyProperty.RegisterAttached("GlowRect", typeof(Rectangle), typeof(Fx));
-
     static void OnGlowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is not Border b || e.NewValue is not true) return;
-        b.MouseEnter += (_, ev) => Enter(b, ev);
-        b.MouseMove += (_, ev) => Move(b, ev);
-        b.MouseLeave += (_, ev) => Leave(b, ev);
+        if (d is not Border b) return;
+        b.MouseEnter -= Enter; b.MouseMove -= Move; b.MouseLeave -= Leave;
+        if (e.NewValue is true) { b.MouseEnter += Enter; b.MouseMove += Move; b.MouseLeave += Leave; }
     }
 
-    /// <summary>The light layer for a card, created the first time the mouse reaches it.</summary>
-    static Rectangle? Layer(Border b)
+    static readonly DependencyProperty GlowLayerProperty =
+        DependencyProperty.RegisterAttached("GlowLayer", typeof(Canvas), typeof(Fx));
+
+    const double GlowSize = 360;
+
+    /// <summary>
+    /// The light layer for a card, made the first time the mouse reaches it: a soft round light drawn once into a
+    /// cached bitmap. Moving it only shifts that bitmap on the graphics card, so it follows the mouse without
+    /// repainting the card (this is what keeps it smooth).
+    /// </summary>
+    static Canvas? Layer(Border b)
     {
-        if (b.GetValue(GlowRectProperty) is Rectangle have) return have;
-        if (b.Child is not Panel panel) return null;
-        var brush = new RadialGradientBrush
+        if (b.GetValue(GlowLayerProperty) is Canvas have) return have;
+        if (b.Child is not Grid panel) return null;   // the light sits behind the card's own grid
+        var dot = new System.Windows.Shapes.Ellipse
         {
-            MappingMode = BrushMappingMode.Absolute, RadiusX = 240, RadiusY = 240,
-            GradientStops = new GradientStopCollection
+            Width = GlowSize, Height = GlowSize, IsHitTestVisible = false,
+            CacheMode = new BitmapCache { RenderAtScale = 1 },
+            RenderTransform = new TranslateTransform(),
+            Fill = new RadialGradientBrush
             {
-                new GradientStop(Color.FromArgb(0x4A, 0xE5, 0x21, 0x3B), 0),
-                new GradientStop(Color.FromArgb(0x00, 0xE5, 0x21, 0x3B), 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Color.FromArgb(0x40, 0xE5, 0x21, 0x3B), 0),
+                    new GradientStop(Color.FromArgb(0x00, 0xE5, 0x21, 0x3B), 1),
+                },
             },
         };
-        var r = b.CornerRadius.TopLeft;
-        var glow = new Rectangle
+        var layer = new Canvas
         {
-            Fill = brush, Opacity = 0, IsHitTestVisible = false, RadiusX = r, RadiusY = r,
+            IsHitTestVisible = false, ClipToBounds = true, Opacity = 0,
             Margin = new Thickness(-b.Padding.Left, -b.Padding.Top, -b.Padding.Right, -b.Padding.Bottom),
         };
-        Grid.SetColumnSpan(glow, 32); Grid.SetRowSpan(glow, 32);
-        panel.Children.Add(glow);
-        b.SetValue(GlowRectProperty, glow);
-        return glow;
+        layer.Children.Add(dot);
+        // round the clip to the card's corners
+        layer.SizeChanged += (_, e) =>
+        {
+            var r = Math.Max(0, b.CornerRadius.TopLeft - b.BorderThickness.Left);
+            layer.Clip = new RectangleGeometry(new Rect(e.NewSize), r, r);
+        };
+        Grid.SetColumnSpan(layer, 32); Grid.SetRowSpan(layer, 32);
+        Panel.SetZIndex(layer, -1);
+        panel.Children.Insert(0, layer);
+        b.SetValue(GlowLayerProperty, layer);
+        return layer;
     }
 
     public static void Enter(object sender, MouseEventArgs e)
     {
-        if (!Active || sender is not Border b || Layer(b) is not { } glow) return;
-        var brush = (RadialGradientBrush)glow.Fill;
+        if (!Active || sender is not Border b || Layer(b) is not { } layer) return;
+        var dot = (System.Windows.Shapes.Ellipse)layer.Children[0];
         if (Application.Current.TryFindResource("AccentColor") is Color c)
         {
-            brush.GradientStops[0].Color = Color.FromArgb(0x4A, c.R, c.G, c.B);
-            brush.GradientStops[1].Color = Color.FromArgb(0x00, c.R, c.G, c.B);
+            var brush = (RadialGradientBrush)dot.Fill;
+            if (brush.GradientStops[0].Color.R != c.R || brush.GradientStops[0].Color.G != c.G || brush.GradientStops[0].Color.B != c.B)
+                dot.Fill = new RadialGradientBrush(Color.FromArgb(0x40, c.R, c.G, c.B), Color.FromArgb(0x00, c.R, c.G, c.B));
         }
-        Place(b, brush, e);
-        glow.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)));
+        Place(b, layer, e);
+        layer.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)));
     }
 
     public static void Move(object sender, MouseEventArgs e)
     {
-        if (sender is Border b && b.GetValue(GlowRectProperty) is Rectangle { Opacity: > 0 } glow) Place(b, (RadialGradientBrush)glow.Fill, e);
+        if (sender is Border b && b.GetValue(GlowLayerProperty) is Canvas layer) Place(b, layer, e);
     }
 
     public static void Leave(object sender, MouseEventArgs e)
     {
-        if (sender is Border b && b.GetValue(GlowRectProperty) is Rectangle glow)
-            glow.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)));
+        if (sender is Border b && b.GetValue(GlowLayerProperty) is Canvas layer)
+            layer.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(220)));
     }
 
-    static void Place(Border b, RadialGradientBrush brush, MouseEventArgs ev)
+    static void Place(Border b, Canvas layer, MouseEventArgs ev)
     {
         var p = ev.GetPosition(b);
-        // the glow layer is larger than the border by its padding, so shift into its own space
-        var q = new Point(p.X + b.Padding.Left, p.Y + b.Padding.Top);
-        brush.Center = q; brush.GradientOrigin = q;
+        var t = (TranslateTransform)((UIElement)layer.Children[0]).RenderTransform;
+        t.X = p.X + b.Padding.Left - b.BorderThickness.Left - GlowSize / 2;
+        t.Y = p.Y + b.Padding.Top - b.BorderThickness.Top - GlowSize / 2;
     }
 
     // ---------------------------------------------------------------------------------- rise in
@@ -113,14 +131,16 @@ public static class Fx
         fe.Loaded -= RiseIn;
         if (!Active) return;
 
-        // cards that appear together get a short stagger; the counter restarts once the batch has been laid out
-        var step = Math.Min(_wave++, 14);
+        // Cards that appear together get a tiny stagger. Only the first few animate; the rest are simply there, so a
+        // page with many tiles opens instantly instead of animating dozens of cards at once.
+        var step = _wave++;
         if (!_waveReset)
         {
             _waveReset = true;
             fe.Dispatcher.BeginInvoke(new Action(() => { _wave = 0; _waveReset = false; }), System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
-        var delay = TimeSpan.FromMilliseconds(step * 30);
+        if (step >= 9) return;
+        var delay = TimeSpan.FromMilliseconds(step * 18);
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
         if (fe.RenderTransform is not TranslateTransform tt || tt.IsFrozen)
@@ -129,25 +149,22 @@ public static class Fx
             fe.RenderTransform = tt;
         }
         tt.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(380)) { BeginTime = delay, EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+            new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(200)) { BeginTime = delay, EasingFunction = ease, FillBehavior = FillBehavior.Stop });
         fe.BeginAnimation(UIElement.OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(320)) { BeginTime = delay, FillBehavior = FillBehavior.Stop });
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { BeginTime = delay, FillBehavior = FillBehavior.Stop });
         fe.Opacity = 1;
     }
 
     // ---------------------------------------------------------------------------------- haze
-    /// <summary>Starts (or stops) the two slow, dark glows that drift behind the pages.</summary>
+    /// <summary>
+    /// Shows or hides the soft accent glow behind the pages. It no longer drifts: moving it forced the whole page to be
+    /// redrawn every frame, which is what made the app feel laggy.
+    /// </summary>
     public static void Haze(Canvas haze, bool run)
     {
         haze.Visibility = run && Active ? Visibility.Visible : Visibility.Collapsed;
         foreach (var child in haze.Children.OfType<Ellipse>())
-        {
-            if (child.RenderTransform is not TranslateTransform tt) continue;
-            if (!run || !Active) { tt.BeginAnimation(TranslateTransform.XProperty, null); tt.BeginAnimation(TranslateTransform.YProperty, null); continue; }
-            var dur = child.Tag is string s && double.TryParse(s, out var secs) ? secs : 40;
-            Anim(tt, TranslateTransform.XProperty, -90, 110, dur);
-            Anim(tt, TranslateTransform.YProperty, 60, -80, dur * 1.25);
-        }
+            if (child.RenderTransform is TranslateTransform tt) { tt.BeginAnimation(TranslateTransform.XProperty, null); tt.BeginAnimation(TranslateTransform.YProperty, null); }
     }
 
     static void Anim(TranslateTransform tt, DependencyProperty p, double from, double to, double seconds) =>

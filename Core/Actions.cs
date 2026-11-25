@@ -55,6 +55,10 @@ public sealed class RegistryAction : TweakAction
 
     string HiveName => _hive switch { RegistryHive.LocalMachine => "HKLM", RegistryHive.Users => "HKU", _ => "HKCU" };
 
+    /// <summary>Which registry value this writes, and to what: used to find settings that would fight each other.</summary>
+    public string ValueKey => $"{HiveName}\\{_path}|{_name}".ToLowerInvariant();
+    public string TargetText => Display(_value());
+
     public bool IsMachinePolicy =>
         _hive == RegistryHive.LocalMachine && _path.Contains("\\Policies\\", StringComparison.OrdinalIgnoreCase);
 
@@ -172,6 +176,8 @@ public sealed class RegistryDeleteAction : TweakAction
     string HiveName => _hive switch { RegistryHive.LocalMachine => "HKLM", RegistryHive.Users => "HKU", _ => "HKCU" };
 
     public override string Describe() => $"{HiveName}\\{_path}  →  {_name} removed (Windows default)";
+
+    public string ValueKey => $"{HiveName}\\{_path}|{_name}".ToLowerInvariant();
 
     public override bool IsApplied() => RegUtil.Read(_hive, _path, _name) == null;
 

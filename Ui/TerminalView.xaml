@@ -1,0 +1,156 @@
+<UserControl x:Class="TrapShack.Ui.TerminalView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:TrapShack.Ui">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="B2V"/>
+
+        <!-- small square icon buttons in the title bar -->
+        <Style x:Key="TermBtn" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="30" Height="28" CornerRadius="8" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1F1F27"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bd" Property="Opacity" Value="0.35"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate DataType="{x:Type ui:TermLine}">
+            <Grid Margin="0,0.5">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <TextBlock x:Name="Mark" Text="{Binding Mark}" FontFamily="{StaticResource IconFont}" FontSize="10" VerticalAlignment="Top" Margin="0,3,0,0"
+                           Foreground="{StaticResource FaintBrush}"/>
+                <TextBlock x:Name="Txt" Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" Foreground="#CFCFD8"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Command">
+                    <Setter TargetName="Txt" Property="Foreground" Value="White"/>
+                    <Setter TargetName="Txt" Property="FontWeight" Value="SemiBold"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Info">
+                    <Setter TargetName="Txt" Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Success">
+                    <Setter TargetName="Txt" Property="Foreground" Value="{StaticResource GreenBrush}"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{StaticResource GreenBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Warning">
+                    <Setter TargetName="Txt" Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{StaticResource AmberBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Error">
+                    <Setter TargetName="Txt" Property="Foreground" Value="#FF7A85"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="#FF7A85"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsLive}" Value="True">
+                    <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border Background="#09090C" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" CornerRadius="14" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- title bar -->
+            <Border x:Name="TitleBar" Padding="12,9,8,9">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="{DynamicResource AccentDeepColor}" Offset="0"/>
+                        <GradientStop Color="#0E0E12" Offset="0.7"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0">
+                        <TextBlock Text="&#xE756;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="TitleText" Text="TrapShack Terminal" FontSize="13" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="Caption" FontSize="11" Foreground="{StaticResource FaintBrush}" TextTrimming="CharacterEllipsis" Text="Ready"/>
+                    </StackPanel>
+                    <!-- status pill -->
+                    <Border x:Name="Pill" Grid.Column="2" CornerRadius="10" Padding="9,3" Margin="8,0,8,0" Background="#1C1C22" BorderBrush="#33333C" BorderThickness="1"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="PillDot" Width="7" Height="7" Fill="{StaticResource FaintBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="PillText" Text="Idle" FontSize="11" Foreground="{StaticResource MutedBrush}"/>
+                        </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="Buttons" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="StopBtn" Style="{StaticResource TermBtn}" ToolTip="Stop" Click="OnStop" Visibility="Collapsed">
+                            <TextBlock Text="&#xE71A;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="#FF7A85"/>
+                        </Button>
+                        <Button Style="{StaticResource TermBtn}" ToolTip="Copy everything" Click="OnCopy">
+                            <TextBlock Text="&#xE8C8;" FontFamily="{StaticResource IconFont}" FontSize="12"/>
+                        </Button>
+                        <Button x:Name="ClearBtn" Style="{StaticResource TermBtn}" ToolTip="Clear" Click="OnClear">
+                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="12"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <!-- thin accent line that runs while something is working -->
+            <Grid Grid.Row="1" Height="2" Background="#15151B" ClipToBounds="True">
+                <Rectangle x:Name="RunBar" Width="140" HorizontalAlignment="Left" Opacity="0">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="{DynamicResource AccentGlowFadeColor}" Offset="0"/>
+                            <GradientStop Color="{DynamicResource AccentHotColor}" Offset="0.5"/>
+                            <GradientStop Color="{DynamicResource AccentGlowFadeColor}" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                    <Rectangle.RenderTransform><TranslateTransform x:Name="RunSlide" X="-140"/></Rectangle.RenderTransform>
+                </Rectangle>
+            </Grid>
+
+            <!-- the output -->
+            <ItemsControl x:Name="Lines" Grid.Row="2" FontFamily="Cascadia Mono, Cascadia Code, Consolas, Courier New" FontSize="12"
+                          VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True">
+                <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer x:Name="Scroller" Padding="12,8,10,4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True">
+                            <ItemsPresenter/>
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <!-- prompt line -->
+            <Border Grid.Row="3" Padding="14,6,14,9" BorderBrush="#16161C" BorderThickness="0,1,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="TrapShack" FontFamily="Cascadia Mono, Consolas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}"/>
+                    <TextBlock Text=" ❯ " FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock x:Name="PromptText" FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource FaintBrush}" Text="waiting for a task"/>
+                    <Rectangle x:Name="Caret" Width="7" Height="13" Margin="4,1,0,0" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

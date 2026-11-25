@@ -37,6 +37,7 @@ public partial class MainWindow : Window, IPageHost
     public MainWindow()
     {
         InitializeComponent();
+        Closing += OnWindowClosing;
         BuildNav();
         _effectsReady = false;
         Fx.On = _settings.LiveEffects;
@@ -50,6 +51,8 @@ public partial class MainWindow : Window, IPageHost
         AppsPanel.Init(this);
         DebloatAppsPanel.Init(this);
         CleanerPanel.Init(this);
+        Apply.SetConsole(_settings.ShowConsole);
+        Apply.ConsoleToggled += on => { _settings.ShowConsole = on; _settings.Save(); };
         AppsPanel.ScanFinished += () => { if (HomePanel.Visibility == Visibility.Visible) RefreshHome(); };
         PageCrumb.MouseLeftButtonUp += (_, _) => { if (_page?.Section == PageDefs.Optimizations) SelectNav("hub"); };
     }
@@ -77,6 +80,7 @@ public partial class MainWindow : Window, IPageHost
             // What is ALREADY applied on this PC, whoever applied it.
             var states = await Task.Run(() => _vms.Select(v => _engine.IsApplied(v.T)).ToList());
             for (var i = 0; i < _vms.Count; i++) _vms[i].SetOn(states[i]);
+            BuildClashMap();
         }
         catch (Exception ex)
         {
@@ -92,10 +96,19 @@ public partial class MainWindow : Window, IPageHost
         _loaded = true;
         StartSilentRecheck();
         _ = AppsPanel.ScanAsync();
+        PreloadSystemInfo();
+        UtilitiesPanel.Init(this, _sys.IsLaptop);
+        CleanerPanel.Measured += total =>
+        {
+            HomeCleanSize.Text = CleanScan.Format(total);
+            HomeCleanText.Text = total > 0 ? "Temporary files and caches the PC Cleaner found. Nothing is deleted until you press Clean." : "Nothing to clean right now.";
+        };
+        _ = QuietCleanerScanAsync();
         SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
         Navigate("home");
-        SetStatus("Ready");
         FadeOutSplash();
+
+        await OfferToFinishInterruptedApplyAsync();
 
         if (!_engine.State.Has("app.welcomed"))
         {
@@ -103,6 +116,27 @@ public partial class MainWindow : Window, IPageHost
             await Task.Delay(450);
             await ShowWelcomeAsync();
         }
+    }
+
+    /// <summary>
+    /// Fail-safe: if the app or the PC stopped while a setting was being applied, that setting may be half-done.
+    /// Offer to put it back the way it was (TrapShack saved the original values before it changed anything).
+    /// </summary>
+    async Task OfferToFinishInterruptedApplyAsync()
+    {
+        var id = _engine.State.Get(TweakEngine.PendingKey);
+        if (string.IsNullOrEmpty(id)) return;
+        _engine.State.Remove(TweakEngine.PendingKey);
+        var vm = _vms.FirstOrDefault(v => v.T.Id == id);
+        if (vm == null) return;
+        if (!Dialogs.Confirm(this, "A change was interrupted",
+                $"TrapShack was closed while it was applying \u201c{vm.T.Title}\u201d, so it may be only partly applied.\n\n" +
+                "Put it back the way it was? (You can apply it again afterwards.)", "Put it back", "Leave it"))
+            return;
+        var err = await Task.Run(() => { try { return _engine.Revert(vm.T); } catch (Exception ex) { return ex.Message; } });
+        vm.SetOn(await Task.Run(() => _engine.IsApplied(vm.T)));
+        if (err != null) Log.Error($"Undo of interrupted {id}: {err}");
+        RefreshViews();
     }
 
     void SetSplash(string text, double progress)
@@ -140,7 +174,7 @@ public partial class MainWindow : Window, IPageHost
                 : "") +
             "\n\nNothing has been changed, and nothing is ever applied until you switch it on or press an Apply button yourself. Every change can be switched off again.";
 
-        Dialogs.Info(this, "Welcome to TrapShack Tweak Utility", message);
+        Dialogs.Info(this, "Welcome to JS Tweak Utility", message);
         await Task.CompletedTask;
     }
 
@@ -208,7 +242,8 @@ public partial class MainWindow : Window, IPageHost
         Add("hub", "Optimizations", "\uE945", false);
         Add("winapps", Page("winapps").Title, Page("winapps").Glyph, false);
         Add("apps", Page("apps").Title, Page("apps").Glyph, false);
-        Add("cleaner", "PC Cleaner", "\uE894", false);
+        Add("cleaner", "PC Cleaner", "\uEA99", false);
+        Add("utilities", "Utilities", "\uE90F", false);
     }
 
     void OnNavChecked(object sender, RoutedEventArgs e)
@@ -233,9 +268,9 @@ public partial class MainWindow : Window, IPageHost
     /// <summary>Shows one panel and hides the others.</summary>
     void ShowPanel(UIElement panel)
     {
-        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel })
+        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel, UtilitiesPanel })
             p.Visibility = ReferenceEquals(p, panel) ? Visibility.Visible : Visibility.Collapsed;
-        panel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)));
+        panel.BeginAnimation(OpacityProperty, null);   // pages switch instantly; the cards inside do a short rise
     }
 
     void Navigate(string key)
@@ -252,6 +287,7 @@ public partial class MainWindow : Window, IPageHost
             case "apps": ShowPanel(AppsPanel); _ = AppsPanel.ScanAsync(); break;
             case "winapps": ShowPanel(DebloatAppsPanel); _ = DebloatAppsPanel.LoadAsync(); break;
             case "cleaner": ShowPanel(CleanerPanel); _ = CleanerPanel.LoadAsync(); break;
+            case "utilities": ShowPanel(UtilitiesPanel); break;
             case "search": ShowPanel(SearchPanel); SearchAllBox.Focus(); RunGlobalSearch(); break;
             case "hub":
                 _hub = true;
@@ -486,7 +522,7 @@ public partial class MainWindow : Window, IPageHost
         {
             IEnumerable<TweakVM> set = key switch
             {
-                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" => Enumerable.Empty<TweakVM>(),
+                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" or "utilities" => Enumerable.Empty<TweakVM>(),
                 "hub" => _vms.Where(v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations),
                 _ => _vms.Where(v => v.PageKey == key),
             };
@@ -561,13 +597,48 @@ public partial class MainWindow : Window, IPageHost
         catch (Exception ex) { Log.Error($"Run {t.Id}: {ex}"); return ex.Message; }
     }
 
+    /// <summary>For each setting, the other settings that write the same Windows value differently (they would undo each other).</summary>
+    readonly Dictionary<string, List<TweakVM>> _clash = new();
+
+    void BuildClashMap()
+    {
+        _clash.Clear();
+        var writes = new Dictionary<string, List<(TweakVM Vm, string Target)>>();
+        foreach (var v in _vms.Where(v => !v.T.OneShot && v.T.ChoiceGroup == null))
+            foreach (var a in v.T.Actions)
+            {
+                var (key, target) = a switch
+                {
+                    RegistryAction r => (r.ValueKey, r.TargetText),
+                    RegistryDeleteAction d => (d.ValueKey, "<removed>"),
+                    _ => (null as string, null as string),
+                };
+                if (key == null) continue;
+                if (!writes.TryGetValue(key, out var list)) writes[key] = list = new();
+                list.Add((v, target!));
+            }
+        foreach (var list in writes.Values)
+            foreach (var x in list)
+                foreach (var y in list)
+                    if (!ReferenceEquals(x.Vm, y.Vm) && x.Target != y.Target)
+                    {
+                        if (!_clash.TryGetValue(x.Vm.T.Id, out var c)) _clash[x.Vm.T.Id] = c = new();
+                        if (!c.Contains(y.Vm)) c.Add(y.Vm);
+                    }
+        foreach (var (id, list) in _clash) Log.Info($"Settings that share a value with {id}: {string.Join(", ", list.Select(v => v.T.Id))}");
+    }
+
     async Task ToggleAsync(TweakVM vm, bool wantOn)
     {
         if (_busy) { vm.SetOn(vm.IsOn); return; }
 
+        var clashing = wantOn && _clash.TryGetValue(vm.T.Id, out var cl) ? cl.Where(o => o.IsOn).ToList() : new List<TweakVM>();
         if (wantOn)
         {
             var parts = new List<string>();
+            if (clashing.Count > 0)
+                parts.Add("This changes the same Windows setting as " + string.Join(", ", clashing.Select(o => "\u201c" + o.T.Title + "\u201d")) +
+                          ". To keep them from fighting, " + (clashing.Count == 1 ? "that one is" : "those are") + " switched off first.");
             if (vm.T.Confirm != null) parts.Add(vm.T.Confirm);
             if (vm.V.Fit == Fit.Caution && vm.V.Note != null) parts.Add("Heads-up for this PC: " + vm.V.Note);
 
@@ -606,6 +677,14 @@ public partial class MainWindow : Window, IPageHost
         {
             vm.SetOn(vm.IsOn);
             return;
+        }
+
+        // settings that would undo this one are put back first, so only one of them is ever in effect
+        foreach (var o in clashing)
+        {
+            var err = await Task.Run(() => _engine.Revert(o.T));
+            if (err != null) Log.Error($"Could not switch off {o.T.Id} before {vm.T.Id}: {err}");
+            o.SetOn(await Task.Run(() => _engine.IsApplied(o.T)));
         }
 
         HideRestartBar();
@@ -743,6 +822,17 @@ public partial class MainWindow : Window, IPageHost
     }
 
     void OnApplyAll(object sender, RoutedEventArgs e) => _ = ApplyRecommendedAsync(null);
+
+    void OnHomeClean(object sender, RoutedEventArgs e) => SelectNav("cleaner");
+
+    /// <summary>A few seconds after startup, the cleaner scans quietly (it only reads) so Home can show what a clean would free.</summary>
+    async Task QuietCleanerScanAsync()
+    {
+        await Task.Delay(4000);
+        try { await CleanerPanel.ScanAsync(); }
+        catch (Exception ex) { Log.Error("Background cleaner scan failed: " + ex.Message); }
+        if (HomeCleanSize.Text == "…") { HomeCleanSize.Text = "?"; HomeCleanText.Text = "Open the PC Cleaner and press Scan to see it."; }
+    }
     void OnApplyPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = ApplyRecommendedAsync(CurrentScope()); }
     void OnUndoPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = UndoAsync(CurrentScope(), toDefaults: true); }
     void OnUndoAll(object sender, RoutedEventArgs e) => _ = UndoAsync(null, toDefaults: false);
@@ -951,7 +1041,25 @@ public partial class MainWindow : Window, IPageHost
     void ShowBusy(string text) { BusyText.Text = text; BusyOverlay.Visibility = Visibility.Visible; }
     void SetBusyText(string text) => BusyText.Text = text;
     void HideBusy() => BusyOverlay.Visibility = Visibility.Collapsed;
-    void SetStatus(string text) => StatusText.Text = text;
+    DispatcherTimer? _statusTimer;
+
+    /// <summary>A short message at the bottom of the window (what was just applied). It disappears by itself after a few seconds.</summary>
+    void SetStatus(string text)
+    {
+        StatusText.Text = text;
+        StatusBar.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        _statusTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _statusTimer.Tick -= OnStatusTimeout;
+        _statusTimer.Tick += OnStatusTimeout;
+        _statusTimer.Stop(); _statusTimer.Start();
+    }
+
+    void OnStatusTimeout(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusText.Text = "";
+        StatusBar.Visibility = Visibility.Collapsed;
+    }
 
     void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
@@ -963,9 +1071,24 @@ public partial class MainWindow : Window, IPageHost
         if (_busy && !Dialogs.Confirm(this, "TrapShack is still working",
                 "Closing now could interrupt a change in progress. Close anyway?", "Close anyway"))
             return;
+        _closeConfirmed = true;
         StopSensors();
         _sensors?.Dispose();
         Close();
+    }
+
+    bool _closeConfirmed;
+
+    /// <summary>Alt+F4 and the taskbar's Close go through here too: never close silently while something is being applied.</summary>
+    void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_closeConfirmed || !(_busy || CleanerPanel.Busy)) return;
+        if (!Dialogs.Confirm(this, "TrapShack is still working",
+                "Changes are still being applied. Closing now could leave a setting half-done.\n\nWait until it finishes, or close anyway?",
+                "Close anyway", "Wait"))
+        { e.Cancel = true; return; }
+        StopSensors();
+        _sensors?.Dispose();
     }
 
     // =============================================================================================
@@ -1126,6 +1249,24 @@ public partial class MainWindow : Window, IPageHost
     bool _sensorsFailed;
     readonly Settings _settings = Settings.Load();
 
+    Task<List<InfoSection>>? _infoTask;
+    Task? _sensorsTask;
+
+    /// <summary>Reads hardware details and starts the sensors quietly after startup, so System info opens instantly.</summary>
+    void PreloadSystemInfo()
+    {
+        _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
+        _sensorsTask ??= StartSensorsAsync();
+    }
+
+    async Task StartSensorsAsync()
+    {
+        if (_sensorsStarted) return;
+        _sensorsStarted = true;
+        _sensors = new Sensors();
+        _sensorsFailed = !await Task.Run(() => _sensors.Start());
+    }
+
     async void ShowSystem()
     {
         ShowPanel(SystemPanel);
@@ -1133,14 +1274,11 @@ public partial class MainWindow : Window, IPageHost
         LiveList.ItemsSource = null;
         FillSystemHeader();
 
-        var infoTask = Task.Run(() => HardwareInfo.Collect(_sys));
-
-        if (!_sensorsStarted)
-        {
-            _sensorsStarted = true;
-            _sensors = new Sensors();
-            _sensorsFailed = !await Task.Run(() => _sensors.Start());
-        }
+        // Details were read in the background at startup, so they show at once; sensors were started then too.
+        _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
+        if (_infoTask.IsCompleted) { try { InfoList.ItemsSource = _infoTask.Result; } catch { } }
+        _sensorsTask ??= StartSensorsAsync();
+        await _sensorsTask;
 
         if (!SystemPanel.IsVisible) return;   // user already left the page
         if (_sensorsFailed)
@@ -1148,7 +1286,7 @@ public partial class MainWindow : Window, IPageHost
         else
             StartLiveTimer();
 
-        try { InfoList.ItemsSource = await infoTask; }
+        try { InfoList.ItemsSource = await _infoTask; }
         catch (Exception ex) { Log.Error("System info failed: " + ex.Message); }
     }
 
@@ -1224,41 +1362,42 @@ public partial class MainWindow : Window, IPageHost
     // ---------- updates ----------
     UpdateInfo? _update;
 
+    /// <summary>Where releases are published. Kept in code only; the Settings page just shows a GitHub mark and the button.</summary>
+    const string UpdateRepo = "Kronos-VII/TrapShack-PC-Panel";
+
     void ShowUpdateSetting()
     {
-        UpdVersion.Text = "Version " + Updater.CurrentText;
-        UpdRepo.Text = _settings.UpdateRepo;
-    }
-
-    void OnUpdRepoChanged(object sender, RoutedEventArgs e)
-    {
-        var v = UpdRepo.Text.Trim();
-        if (v.Length == 0 || v == _settings.UpdateRepo) return;
-        _settings.UpdateRepo = v;
-        _settings.Save();
-        _update = null;
-        UpdInstall.Visibility = Visibility.Collapsed;
+        // the official GitHub mark, if Assets\Brand\github.png was added to the project
+        try
+        {
+            var uri = new Uri("pack://application:,,,/Assets/Brand/github.png");
+            if (Application.GetResourceStream(uri) != null)
+            {
+                GitHubMark.Source = new System.Windows.Media.Imaging.BitmapImage(uri);
+                GitHubGlyph.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch { /* no mark: the icon stays */ }
     }
 
     async void OnCheckUpdate(object sender, RoutedEventArgs e)
     {
-        OnUpdRepoChanged(sender, e);
         UpdCheck.IsEnabled = false;
         UpdInstall.Visibility = Visibility.Collapsed;
         UpdStatus.Foreground = (Brush)FindResource("MutedBrush");
         UpdStatus.Text = "Checking GitHub…";
         try
         {
-            _update = await Updater.CheckAsync(_settings.UpdateRepo);
+            _update = await Updater.CheckAsync(UpdateRepo);
             if (_update == null)
             {
                 UpdStatus.Foreground = (Brush)FindResource("GreenBrush");
-                UpdStatus.Text = "You are on the latest version.";
+                UpdStatus.Text = "You're up to date.";
             }
             else
             {
                 UpdStatus.Foreground = (Brush)FindResource("AmberBrush");
-                UpdStatus.Text = "Version " + _update.Latest.ToString(3) + " is available.";
+                UpdStatus.Text = "A new version is ready to install.";
                 UpdInstall.Visibility = Visibility.Visible;
             }
         }

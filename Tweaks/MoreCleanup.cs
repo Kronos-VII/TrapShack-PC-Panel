@@ -11,16 +11,6 @@ public static partial class Catalog
 
     static IEnumerable<Tweak> MoreCleanup()
     {
-        yield return Once(Mk("clean.oosu", Category.Debloat, "Privacy tool",
-            "Open O&O ShutUp10++",
-            "Downloads the free privacy tool from its publisher and opens it so you can review its settings.",
-            Sometimes,
-            L(new CustomAction(
-                "Make a restore point and policy backup, download O&O ShutUp10++, check its signature and open it",
-                isApplied: () => false,
-                apply: () => PrivacyTool.Run())),
-            detail: "Before opening it TrapShack makes a restore point and saves a copy of your policy registry keys under ProgramData\\TrapShack\\backups. The download comes from the publisher's own server and is only run if it carries a valid O&O Software signature. If the download is blocked, the last verified copy is used; if there is none, the official page opens instead. Inside the tool, its own Actions menu can undo its changes."));
-
         yield return Mk("clean.lockscreen", Category.Customize, Appearance,
             "Skip the lock screen",
             "Goes straight to the sign-in screen without the lock screen picture.",
@@ -34,7 +24,7 @@ public static partial class Catalog
             s => W11(s, Verdict.Opt()),
             L(LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Start", "HideRecommendedSection", 1, 0),
               LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Education", "IsEducationEnvironment", 1, 0),
-              LM(@"SOFTWARE\Policies\Microsoft\Windows\Explorer", "HideRecommendedSection", 1, 0)),
+              LM(@"SOFTWARE\Policies\Microsoft\Windows\Explorer", "HideRecommendedSection", 1, null)),
             detail: "Works fully on Pro, Enterprise and Education. On Home the setting may be ignored.", signOut: true);
 
         yield return Mk("clean.new-outlook", Category.Customize, Appearance,
@@ -43,7 +33,7 @@ public static partial class Catalog
             Sometimes,
             L(CU(@"SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences", "UseNewOutlook", 0, 1),
               CU(@"Software\Microsoft\Office\16.0\Outlook\Options\General", "HideNewOutlookToggle", 1, 0),
-              CU(@"Software\Policies\Microsoft\Office\16.0\Outlook\Options\General", "DoNewOutlookAutoMigration", 0, 0),
+              CU(@"Software\Policies\Microsoft\Office\16.0\Outlook\Options\General", "DoNewOutlookAutoMigration", 0, null),
               CU(@"Software\Policies\Microsoft\Office\16.0\Outlook\Preferences", "NewOutlookMigrationUserSetting", 0, null)),
             detail: "Only matters if you use the desktop Outlook from Microsoft 365.");
 

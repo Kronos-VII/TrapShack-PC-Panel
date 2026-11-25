@@ -272,7 +272,7 @@ public static partial class Catalog
             "Settings App Notifications",
             "Shows account notifications in the Settings app, including prompts to reauthenticate, backup your device, and manage subscriptions",
             Always,
-            L(new RegistryAction(RegistryHive.CurrentUser, "Software\\Microsoft\\Windows\\CurrentVersion\\SystemSettings\\AccountNotifications", "EnableAccountNotifications", 0, RegistryValueKind.DWord, null)),
+            L(new RegistryAction(RegistryHive.CurrentUser, "Software\\Microsoft\\Windows\\CurrentVersion\\SystemSettings\\AccountNotifications", "EnableAccountNotifications", 0, RegistryValueKind.DWord, 1)),
             detail: "Shows account notifications in the Settings app, including prompts to reauthenticate, backup your device, and manage subscriptions. Recommended for most PCs.");
 
         yield return Mk("opt.privacy-narrator-online-services", Category.Privacy, "Speech & inking",

@@ -62,9 +62,23 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="42" Height="42" CornerRadius="11" Background="{Binding Tile}" Margin="0,0,11,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{Binding GlyphFg}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border Width="42" Height="42" CornerRadius="11" Background="{Binding TileBg}" Margin="0,0,11,0" VerticalAlignment="Center">
+                        <Grid>
+                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{Binding GlyphFg}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoPhoto}"/>
+                            <Image Source="{Binding Photo}" Width="30" Height="30" Visibility="{Binding HasPhoto}"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <Border Width="42" Height="42" CornerRadius="11" Background="{Binding Art.Tile}" Visibility="{Binding HasArt}">
+                                <Grid>
+                                    <Image Source="{Binding Art.Photo}" Visibility="{Binding Art.PhotoVisible}" Width="42" Height="42" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <Viewbox Width="22" Height="22" Visibility="{Binding Art.IconVisible}">
+                                        <Path Data="{Binding Art.Icon}" Fill="{Binding Art.Glyph}" Width="24" Height="24" Stretch="Uniform"/>
+                                    </Viewbox>
+                                    <TextBlock Text="{Binding Art.Mono}" Visibility="{Binding Art.MonoVisible}" Foreground="{Binding Art.Glyph}"
+                                               FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>

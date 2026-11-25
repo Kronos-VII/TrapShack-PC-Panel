@@ -29,10 +29,42 @@ public partial class ProgressDock : UserControl
 
     public bool CancelRequested { get; private set; }
 
+    // ---------------------------------------------------------------- console
+    bool _consoleOn;
+
+    void Append(string line)
+    {
+        var kind = line.StartsWith("PS>") || line.StartsWith("> ") ? TrapShack.Core.TermKind.Command
+                 : line.StartsWith("! ") ? TrapShack.Core.TermKind.Error : TrapShack.Core.TermKind.Output;
+        if (kind == TrapShack.Core.TermKind.Command) ConsoleTerm.Command(line.StartsWith("PS>") ? line[3..].Trim() : line[2..]);
+        else ConsoleTerm.Line(kind == TrapShack.Core.TermKind.Error ? line[2..] : line, false, kind);
+    }
+
+    void ShowConsole(bool on)
+    {
+        _consoleOn = on;
+        ConsoleBox.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        ConsoleBtnText.Text = on ? "Hide console" : "Console";
+    }
+
+    /// <summary>Raised when the user shows or hides the console, so the main window can remember it.</summary>
+    public event Action<bool>? ConsoleToggled;
+
+    /// <summary>Sets the console's starting state from the saved settings.</summary>
+    public void SetConsole(bool on) => ShowConsole(on);
+
+    void OnToggleConsole(object sender, RoutedEventArgs e)
+    {
+        ShowConsole(!_consoleOn);
+        ConsoleToggled?.Invoke(_consoleOn);
+    }
+
     public ProgressDock()
     {
         InitializeComponent();
         Visibility = Visibility.Collapsed;
+        TrapShack.Core.Log.Console += line => Dispatcher.BeginInvoke(new Action(() => Append(line)));
+
         _timer.Tick += (_, _) => Tick();
     }
 
@@ -58,6 +90,8 @@ public partial class ProgressDock : UserControl
         CancelBtn.IsEnabled = true;
 
         Visibility = Visibility.Visible;
+        if (_consoleOn) ShowConsole(true);
+        ConsoleTerm.SetState(TermState.Running, title);
         SetBarColor((Brush)Application.Current.Resources["AccentBrush"]);
         PercentText.Foreground = (Brush)Application.Current.Resources["MutedBrush"];
         Card.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)));
@@ -98,6 +132,7 @@ public partial class ProgressDock : UserControl
 
     public void Finish(string pill, string heading, string note, int verified, int needRestart, int failed, bool autoClose)
     {
+        ConsoleTerm.SetState(failed > 0 ? TermState.Failed : TermState.Done, heading);
         _finished = true;
         _running = -1;
         var bad = failed > 0;

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>TrapShackTweakUtility</AssemblyName>
+    <RootNamespace>TrapShack</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Product>TrapShack Tweak Utility</Product>
+    <Company>TrapShack</Company>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Description>Windows debloat, privacy and performance tweaks with full restore.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Live CPU/GPU temperatures. Uses the PawnIO driver for CPU sensors; the app works without it. -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\logo.png" />
+    <!-- Drop PNG logos named after the app id (see Core/AppCatalog.cs) into Assets\AppLogos and they are used automatically. -->
+    <Resource Include="Assets\AppLogos\*.png" />
+    <!-- PC Cleaner rules (the safe set of winapp2.ini), carried inside the program -->
+    <EmbeddedResource Include="Assets\Cleaner\winapp2.ini" />
+    <!-- Optional brand marks (for example Assets\Brand\github.png for the Updates card in Settings) -->
+    <Resource Include="Assets\Brand\*.png" />
+  </ItemGroup>
+
+</Project>
