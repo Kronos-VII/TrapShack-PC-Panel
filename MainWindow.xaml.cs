@@ -1,0 +1,1451 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Net.Http;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using TrapShack.Core;
+using TrapShack.Tweaks;
+using TrapShack.Ui;
+
+namespace TrapShack;
+
+public partial class MainWindow : Window, IPageHost
+{
+    readonly TweakEngine _engine = new();
+
+    SystemInfo _sys = SystemInfo.Current;
+    List<TweakVM> _vms = new();
+    PageDef? _page;
+    bool _hub;
+    string _hubSection = PageDefs.Optimizations;
+    readonly Dictionary<RadioButton, string> _navKeys = new();
+    readonly Dictionary<string, RadioButton> _navByKey = new();
+    bool _loaded;
+    bool _busy;
+    bool _searching, _sectionInit, _restartArmed;
+    readonly HashSet<string> _restartIds = new();
+    string? _restartNote;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        BuildNav();
+        _effectsReady = false;
+        Fx.On = _settings.LiveEffects;
+        EffectsCheck.IsChecked = _settings.LiveEffects;
+        _effectsReady = true;
+        Fx.Haze(Haze, _settings.LiveEffects);
+        QuickPop.Closed += (_, _) => _quickClosed = DateTime.Now;
+        Wheel.State = _hsv; ValueBar.State = _hsv;
+        Wheel.Picking += OnAccentPicking; ValueBar.Picking += OnAccentPicking;
+        Wheel.Picked += OnAccentPicked; ValueBar.Picked += OnAccentPicked;
+        AppsPanel.Init(this);
+        DebloatAppsPanel.Init(this);
+        CleanerPanel.Init(this);
+        AppsPanel.ScanFinished += () => { if (HomePanel.Visibility == Visibility.Visible) RefreshHome(); };
+        PageCrumb.MouseLeftButtonUp += (_, _) => { if (_page?.Section == PageDefs.Optimizations) SelectNav("hub"); };
+    }
+
+    // =============================================================================================
+    // Startup
+    // =============================================================================================
+
+    async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            SetSplash("Detecting your hardware…", 0.14);
+            await Task.Run(() => _sys = SystemInfo.Detect());
+
+            SetSplash("Scanning apps, services and scheduled tasks…", 0.45);
+            await Task.Run(() => Parallel.Invoke(() => _sys.ProbeSlow(), Caches.RefreshTasks, Caches.RefreshAppx));
+
+            SetSplash($"Choosing settings for your {_sys.CpuBrand} processor and {GpuBrand}…", 0.74);
+            var tweaks = await Task.Run(() => Catalog.Build());
+            _vms = tweaks.Select(t => new TweakVM(t, Judge(t))).ToList();
+
+            SetSplash("Reading what is already applied…", 0.9);
+            // What is ALREADY applied on this PC, whoever applied it.
+            var states = await Task.Run(() => _vms.Select(v => _engine.IsApplied(v.T)).ToList());
+            for (var i = 0; i < _vms.Count; i++) _vms[i].SetOn(states[i]);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Startup scan failed: " + ex);
+            Dialogs.Info(this, "Scan problem", "TrapShack couldn't read everything on this PC:\n\n" + ex.Message +
+                "\n\nSettings it couldn't read are left alone.");
+        }
+
+        SetSplash("Ready", 1.0);
+        var wait = 2300 - (int)clock.ElapsedMilliseconds;   // keep the splash up long enough to feel deliberate
+        if (wait > 0) await Task.Delay(wait);
+
+        _loaded = true;
+        StartSilentRecheck();
+        _ = AppsPanel.ScanAsync();
+        SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
+        Navigate("home");
+        SetStatus("Ready");
+        FadeOutSplash();
+
+        if (!_engine.State.Has("app.welcomed"))
+        {
+            _engine.State.Set("app.welcomed", DateTime.Now.ToString("o"));
+            await Task.Delay(450);
+            await ShowWelcomeAsync();
+        }
+    }
+
+    void SetSplash(string text, double progress)
+    {
+        SplashStatus.Text = text;
+        SplashBar.BeginAnimation(RangeBase.ValueProperty,
+            new DoubleAnimation(progress, TimeSpan.FromMilliseconds(450)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    }
+
+    void FadeOutSplash()
+    {
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(500)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        fade.Completed += (_, _) => Splash.Visibility = Visibility.Collapsed;
+        Splash.BeginAnimation(OpacityProperty, fade);
+    }
+
+    /// <summary>Shown once, the first time the app runs.</summary>
+    async Task ShowWelcomeAsync()
+    {
+        var pending = _vms.Count(v => v.V.Fit == Fit.Recommended && !v.IsOn);
+        var locked = _vms.Count(v => v.V.Fit == Fit.Unavailable && !v.IsOn);
+        var gpu = _sys.Gpus.Count > 0 ? string.Join(" + ", _sys.Gpus.Take(2)) : "Graphics not detected";
+
+        var message =
+            "We've scanned this PC and tailored everything to it:\n\n" +
+            $"•  {_sys.OsName}\n" +
+            $"•  {_sys.Cpu}\n" +
+            $"•  {gpu}\n" +
+            $"•  {_sys.RamGb:0.#} GB RAM · {_sys.Storage} · {_sys.DeviceType}\n\n" +
+            (pending > 0
+                ? $"{pending} recommended setting{(pending == 1 ? " is" : "s are")} ready for this PC."
+                : "Everything recommended for this PC is already applied.") +
+            (locked > 0
+                ? $" {locked} other setting{(locked == 1 ? " doesn't" : "s don't")} suit it and {(locked == 1 ? "is" : "are")} locked, so you can't apply {(locked == 1 ? "it" : "them")} by mistake."
+                : "") +
+            "\n\nNothing has been changed, and nothing is ever applied until you switch it on or press an Apply button yourself. Every change can be switched off again.";
+
+        Dialogs.Info(this, "Welcome to TrapShack Tweak Utility", message);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>Decides how well a tweak fits this PC. This is where the smart gating lives.</summary>
+    Verdict Judge(Tweak t)
+    {
+        if (!_sys.Supported)
+            return Verdict.No("TrapShack needs Windows 10 (version 2004 or newer) or Windows 11.");
+        if (!_engine.IsAvailable(t))
+            return Verdict.No("Not present on this PC.");
+
+        var v = t.Evaluate(_sys);
+        if (_sys.DomainJoined && t.UsesMachinePolicy && v.Fit == Fit.Recommended)
+            return Verdict.Opt("This PC is joined to a domain, so your organisation's policies may override this.");
+
+        // What counts as "recommended" depends on the section: the standard set for Debloat, the per-setting recommended values for Optimizations.
+        var pageKey = PageDefs.KeyOf(t);
+        if (pageKey == "customize") return v;   // Customization sits under Optimizations but keeps its own verdicts
+        var section = PageDefs.Get(pageKey).Section;
+        if (section == PageDefs.Debloat)
+        {
+            if (Recommended.Standard.Contains(t.Id)) return v.Fit == Fit.Optional ? Verdict.Rec(v.Note) : v;
+            if (v.Fit == Fit.Recommended) return Verdict.Opt(v.Note);
+        }
+        else if (section == PageDefs.Optimizations)
+        {
+            if (t.Id.StartsWith("opt.")) return v;   // carries its own verdict
+            if (Recommended.OptimizationRecommended.Contains(t.Id)) return v.Fit == Fit.Optional ? Verdict.Rec(v.Note) : v;
+            if (v.Fit == Fit.Recommended) return Verdict.Opt(v.Note);
+        }
+        return v;
+    }
+
+    string GpuBrand =>
+        _sys.HasNvidiaGpu ? "NVIDIA graphics" :
+        _sys.HasAmdDiscreteGpu ? "AMD Radeon graphics" :
+        _sys.HasIntelArcGpu ? "Intel Arc graphics" :
+        _sys.Gpus.Count > 0 ? "integrated graphics" : "unknown graphics";
+
+    // =============================================================================================
+    // Navigation
+    // =============================================================================================
+
+    void BuildNav()
+    {
+        _navKeys[NavHome] = "home"; _navByKey["home"] = NavHome;
+        _navKeys[NavSystem] = "system"; _navByKey["system"] = NavSystem;
+        _navKeys[NavSettings] = "settings"; _navByKey["settings"] = NavSettings;
+
+        RadioButton Add(string key, string title, string glyph, bool sub)
+        {
+            var rb = new RadioButton
+            {
+                Style = (Style)FindResource("NavButton"), Content = title, Tag = glyph, GroupName = "nav",
+                Margin = sub ? new Thickness(16, 0, 0, 0) : new Thickness(0),
+            };
+            rb.Checked += OnNavChecked;
+            _navKeys[rb] = key; _navByKey[key] = rb;
+            NavHost.Children.Add(rb);
+            return rb;
+        }
+        // Home, Debloat, Optimizations (every Optimizations page, Customization included, opens from there), Debloat apps, Apps.
+        PageDef Page(string key) => PageDefs.Get(key);
+        Add("debloat", Page("debloat").Title, Page("debloat").Glyph, false);
+        Add("hub", "Optimizations", "\uE945", false);
+        Add("winapps", Page("winapps").Title, Page("winapps").Glyph, false);
+        Add("apps", Page("apps").Title, Page("apps").Glyph, false);
+        Add("cleaner", "PC Cleaner", "\uE894", false);
+    }
+
+    void OnNavChecked(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        if (_navKeys.TryGetValue((RadioButton)sender, out var key)) Navigate(key);
+    }
+
+    void SelectNav(string key)
+    {
+        if (_navByKey.TryGetValue(key, out var rb)) { rb.IsChecked = true; return; }
+        // An Optimizations area page: keep "Optimizations" highlighted and open the page directly.
+        _loaded = false; _navByKey["hub"].IsChecked = true; _loaded = true;
+        Navigate(key);
+    }
+
+    void OnHubRowClick(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string key) SelectNav(key);
+    }
+
+    /// <summary>Shows one panel and hides the others.</summary>
+    void ShowPanel(UIElement panel)
+    {
+        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel })
+            p.Visibility = ReferenceEquals(p, panel) ? Visibility.Visible : Visibility.Collapsed;
+        panel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)));
+    }
+
+    void Navigate(string key)
+    {
+        UpdateNavCounts();
+        StopSensors();
+        _page = null;
+        _hub = false;
+        switch (key)
+        {
+            case "home": ShowPanel(HomePanel); RefreshHome(); break;
+            case "system": ShowSystem(); break;
+            case "settings": ShowPanel(SettingsPanel); BuildSwatches(); ShowRestorePointSetting(); ShowUpdateSetting(); break;
+            case "apps": ShowPanel(AppsPanel); _ = AppsPanel.ScanAsync(); break;
+            case "winapps": ShowPanel(DebloatAppsPanel); _ = DebloatAppsPanel.LoadAsync(); break;
+            case "cleaner": ShowPanel(CleanerPanel); _ = CleanerPanel.LoadAsync(); break;
+            case "search": ShowPanel(SearchPanel); SearchAllBox.Focus(); RunGlobalSearch(); break;
+            case "hub":
+                _hub = true;
+                _hubSection = PageDefs.Optimizations;
+                ShowPanel(HubPanel); RefreshHub(); break;
+            default: ShowTweakPage(PageDefs.Get(key)); break;
+        }
+    }
+
+    void ShowTweakPage(PageDef page)
+    {
+        _page = page;
+        ShowPanel(TweakPanel);
+        var area = page.Section == PageDefs.Optimizations;
+        PageCrumb.Text = area ? "\u2039  Optimizations" : page.Section.ToUpperInvariant();
+        PageCrumb.Cursor = area ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
+        PageTitle.Text = page.Title;
+        PageSubtitle.Text = page.Subtitle;
+        SearchBox.Text = "";
+
+        ApplyPageView();
+        UpdatePageProgress();
+    }
+
+    void OnSearchAllChanged(object sender, TextChangedEventArgs e) => RunGlobalSearch();
+
+    void RunGlobalSearch()
+    {
+        if (SearchAllBox == null || _vms == null) return;
+        var q = SearchAllBox.Text.Trim();
+        SearchAllHint.Visibility = q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (q.Length < 2)
+        {
+            SearchAllList.ItemsSource = null;
+            SearchAllCount.Text = "Type at least two letters to search every setting in the app.";
+            return;
+        }
+        var words = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var hits = _vms.Where(v => words.All(w =>
+                v.Title.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                v.Summary.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                (v.T.Detail ?? "").Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(v => v.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ? 0 : 1).Take(80).ToList();
+        SearchAllCount.Text = hits.Count == 0 ? "Nothing matches that." : $"{hits.Count} setting{(hits.Count == 1 ? "" : "s")} found";
+        var view = new ListCollectionView(hits);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TweakVM.PageTitle)));
+        SearchAllList.ItemsSource = view;
+    }
+
+    void OnSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ApplyPageView();
+    }
+
+    /// <summary>
+    /// Builds the grouped list for the current page, narrowed by the search box. The list is rebuilt on every change so
+    /// that, while searching, folded sections open up and show their matches.
+    /// </summary>
+    void ApplyPageView()
+    {
+        if (_page == null || _vms == null) return;
+        var q = SearchBox.Text.Trim();
+        var key = _page.Key;
+        var view = new ListCollectionView(_vms.Where(v => v.PageKey == key).ToList());
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TweakVM.Group)));
+        if (q.Length > 0)
+            view.Filter = o => o is TweakVM t &&
+                (t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                 t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                 (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+        _searching = q.Length > 0;
+
+        // The Debloat page is laid out as category cards; every other page as tiles.
+        var cards = key == "debloat";
+        PanelScroll.Visibility = cards ? Visibility.Visible : Visibility.Collapsed;
+        TweakScroll.Visibility = cards ? Visibility.Collapsed : Visibility.Visible;
+        QuickBtnText.Text = cards ? "Quick select" : "Quick actions";
+        if (cards) { TweakList.ItemsSource = null; BuildDebloatCards(q); return; }
+        PanelList.ItemsSource = null;
+        TweakList.ItemsSource = view;
+    }
+
+    List<DebloatCategoryVM> _cards = new();
+
+    /// <summary>Builds the Debloat page: one card per category, in the order of Catalog.DebloatLayout; drop-downs for settings that share one value.</summary>
+    void BuildDebloatCards(string q)
+    {
+        bool Hit(TweakVM t) => q.Length == 0 ||
+            t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            (t.T.ChoiceGroup ?? "").Contains(q, StringComparison.OrdinalIgnoreCase);
+        var cards = new List<DebloatCategoryVM>();
+        foreach (var (section, glyph, _) in Catalog.DebloatLayout)
+        {
+            var items = _vms.Where(v => v.PageKey == "debloat" && v.Group == section).ToList();
+            var rows = new List<object>();
+            var done = new HashSet<string>();
+            foreach (var v in items)
+            {
+                var g = v.T.ChoiceGroup;
+                if (g == null) { if (Hit(v)) rows.Add(v); continue; }
+                if (!done.Add(g)) continue;
+                var opts = items.Where(o => o.T.ChoiceGroup == g).ToList();
+                if (q.Length == 0 || g.Contains(q, StringComparison.OrdinalIgnoreCase) || opts.Any(Hit)) rows.Add(new ChoiceVM(g, opts));
+            }
+            if (rows.Count == 0) continue;
+            var card = new DebloatCategoryVM { Title = section, Glyph = glyph, Rows = rows };
+            card.Refresh();
+            cards.Add(card);
+        }
+        _cards = cards;
+        PanelList.ItemsSource = cards;
+        PanelEmpty.Visibility = cards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>A drop-down option was picked: undo the option in effect (so "undo" later restores the true original), then apply the new one.</summary>
+    async void OnChoicePick(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not ChoiceOptionVM opt) return;
+        var choice = opt.Parent;
+        foreach (var p in FindPopups(sender as DependencyObject)) p.IsOpen = false;
+        if (_busy || opt.IsCurrent && opt.Vm.IsOn) return;
+        foreach (var other in choice.Options.Where(o => !ReferenceEquals(o, opt) && o.Vm.IsOn && _engine.HasBackup(o.Vm.T)))
+            await ToggleAsync(other.Vm, false);
+        await ToggleAsync(opt.Vm, true);
+        // every option reads the same value, so re-read them all
+        var states = await Task.Run(() => choice.Options.Select(o => _engine.IsApplied(o.Vm.T)).ToList());
+        for (var i = 0; i < states.Count; i++) choice.Options[i].Vm.SetOn(states[i]);
+        choice.Refresh();
+        foreach (var c in _cards) c.Refresh();
+    }
+
+    static IEnumerable<System.Windows.Controls.Primitives.Popup> FindPopups(DependencyObject? d)
+    {
+        // the option buttons live inside a Popup; walk up the logical tree to close it
+        while (d != null)
+        {
+            if (d is System.Windows.Controls.Primitives.Popup p) yield return p;
+            d = LogicalTreeHelper.GetParent(d) ?? (d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : null);
+        }
+    }
+
+    // ---- folding sections (the choice is remembered) ----
+
+    string? SectionKey(object sender) =>
+        sender is FrameworkElement { DataContext: CollectionViewGroup g } && _page != null ? _page.Key + "|" + g.Name : null;
+
+    void OnSectionHeaderLoaded(object sender, RoutedEventArgs e)
+    {
+        var key = SectionKey(sender);
+        if (key == null || sender is not ToggleButton tb) return;
+        _sectionInit = true;
+        tb.IsChecked = _searching || !_settings.ClosedSections.Contains(key);
+        _sectionInit = false;
+    }
+
+    void OnSectionToggled(object sender, RoutedEventArgs e)
+    {
+        if (_sectionInit || _searching) return;
+        var key = SectionKey(sender);
+        if (key == null || sender is not ToggleButton tb) return;
+        if (tb.IsChecked == true) _settings.ClosedSections.Remove(key);
+        else if (!_settings.ClosedSections.Contains(key)) _settings.ClosedSections.Add(key);
+        _settings.Save();
+    }
+
+    /// <summary>Ctrl+F jumps to the search box of whichever page is showing one.</summary>
+    void OnWindowKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F || (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        if (AppsPanel.Visibility == Visibility.Visible) { AppsPanel.FocusSearch(); e.Handled = true; return; }
+        if (DebloatAppsPanel.Visibility == Visibility.Visible) { DebloatAppsPanel.FocusSearch(); e.Handled = true; return; }
+        if (CleanerPanel.Visibility == Visibility.Visible) { CleanerPanel.FocusSearch(); e.Handled = true; return; }
+        TextBox? box = TweakPanel.Visibility == Visibility.Visible ? SearchBox
+                     : SearchPanel.Visibility == Visibility.Visible ? SearchAllBox : null;
+        if (box == null) return;
+        box.Focus();
+        box.SelectAll();
+        e.Handled = true;
+    }
+
+    static (int RecDone, int RecTotal, int Default, int Custom, int Total) Stats(List<TweakVM> items)
+    {
+        items = items.Where(v => !v.T.OneShot && v.T.ChoiceGroup == null).ToList();
+        var rec = items.Where(v => v.V.Fit == Fit.Recommended).ToList();
+        return (rec.Count(v => v.IsOn), rec.Count, items.Count(v => !v.IsOn),
+                items.Count(v => v.IsOn && v.V.Fit != Fit.Recommended), items.Count);
+    }
+
+    void RefreshHub()
+    {
+        HubTitle.Text = "Optimizations";
+        HubBlurb.Text = "Pick an area. The bar shows how many of its recommended settings are on; the grey tag counts settings still at the Windows default.";
+        var rows = new List<HubRow>();
+        foreach (var p in PageDefs.All.Where(p => p.Section == _hubSection))
+        {
+            var items = _vms.Where(v => v.PageKey == p.Key).ToList();
+            if (items.Count == 0) continue;
+            var st = Stats(items);
+            var groups = items.Select(v => v.Group).Distinct().ToList();
+            var text = string.Join(", ", groups.Take(5)) + (groups.Count > 5 ? ", …" : "");
+            rows.Add(new HubRow(p.Key, p.Title, text, p.Glyph,
+                $"Recommended {st.RecDone}/{st.RecTotal}", st.RecTotal > 0,
+                $"Default {st.Default}/{st.Total}",
+                $"Custom {st.Custom}/{st.Total}", st.Custom > 0,
+                st.RecTotal == 0 ? 0 : (double)st.RecDone / st.RecTotal));
+        }
+        HubList.ItemsSource = rows;
+        var all = _vms.Where(v => PageDefs.All.Any(p => p.Section == _hubSection && p.Key == v.PageKey)).ToList();
+        var s = Stats(all);
+        HubSummary.Text = s.RecTotal == 0 ? "" : $"{s.RecDone} of {s.RecTotal} recommended settings applied across these pages";
+    }
+
+    void UpdatePageProgress()
+    {
+        if (_page == null) return;
+        var items = _vms.Where(v => v.PageKey == _page.Key).ToList();
+        var st = Stats(items);
+
+        BadgeRec.Visibility = st.RecTotal > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BadgeRecText.Text = $"Recommended {st.RecDone}/{st.RecTotal}";
+        BadgeDefText.Text = $"Default {st.Default}/{st.Total}";
+        BadgeCustom.Visibility = st.Custom > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BadgeCustomText.Text = $"Custom {st.Custom}/{st.Total}";
+    }
+
+    /// <summary>Red number beside a sidebar page: how many of its settings are switched on.</summary>
+    void UpdateNavCounts()
+    {
+        if (_vms == null || _vms.Count == 0) return;
+        foreach (var (rb, key) in _navKeys)
+        {
+            IEnumerable<TweakVM> set = key switch
+            {
+                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" => Enumerable.Empty<TweakVM>(),
+                "hub" => _vms.Where(v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations),
+                _ => _vms.Where(v => v.PageKey == key),
+            };
+            var n = set.Count(v => v.IsOn && !v.T.OneShot && v.T.ChoiceGroup == null);
+            NavBadge.SetText(rb, n > 0 ? n.ToString() : "");
+        }
+    }
+
+    void RefreshViews()
+    {
+        UpdateNavCounts();
+        foreach (var c in _cards) c.Refresh();
+        if (_page != null) UpdatePageProgress();
+        else if (_hub) RefreshHub();
+        else RefreshHome();
+    }
+
+    // =============================================================================================
+    // Home
+    // =============================================================================================
+
+    /// <summary>The Home page is deliberately small: who this PC is, how far the recommended set has got, and the two actions.</summary>
+    void RefreshHome()
+    {
+        var recommended = _vms.Where(v => v.V.Fit == Fit.Recommended && !v.T.OneShot).ToList();
+        var done = recommended.Count(v => v.IsOn);
+        var pending = recommended.Count - done;
+
+        HomeSub.Text = string.Join("  ·  ", new[] { _sys.OsName, _sys.Cpu, _sys.Gpus.Count > 0 ? _sys.Gpus[0] : "", _sys.RamGb > 0 ? $"{Math.Round(_sys.RamGb)} GB RAM" : "" }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+        HomeTitle.Text = recommended.Count == 0 ? "Recommended settings"
+                       : pending == 0 ? "All recommended settings applied" : "Recommended settings";
+        HomeCount.Text = recommended.Count == 0 ? "" : $"{done} / {recommended.Count}";
+        HomeBar.Value = recommended.Count == 0 ? 0 : (double)done / recommended.Count;
+        HomeText.Text = pending > 0
+            ? $"{(pending == 1 ? "1 setting is" : pending + " settings are")} ready for this PC. Nothing is changed until you press the button, and every change can be switched off again."
+            : "Everything TrapShack recommends for this PC is already on. You can still browse every page on the left.";
+        ApplyAllButton.IsEnabled = pending > 0;
+    }
+
+    // =============================================================================================
+    // One switch
+    // =============================================================================================
+
+    async void OnSwitchClick(object sender, RoutedEventArgs e)
+    {
+        var button = (ToggleButton)sender;
+        if (button.DataContext is not TweakVM vm) return;
+        await ToggleAsync(vm, button.IsChecked == true);
+    }
+
+    async void OnRunNowClick(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not TweakVM vm || _busy) return;
+        if (!Dialogs.Confirm(this, vm.T.Title, vm.T.Confirm ?? "Run this one-time action now?", "Run now")) return;
+        HideRestartBar();
+        _busy = true;
+        Apply.Begin("Running", "Running: " + vm.T.Title, new List<(string, string)> { (vm.T.Title, vm.T.Summary) }, false);
+        Apply.StartStep(0);
+        var error = await Task.Run(() => TryRun(vm.T));
+        Apply.EndStep(0, error == null ? StepResult.Done : StepResult.Failed, error == null ? "Done" : null);
+        if (error == null) Apply.Finish("Complete", vm.T.Title, "Finished.", 1, 0, 0, autoClose: true);
+        else Apply.Finish("Didn't finish", "That didn't finish", error, 0, 0, 1, autoClose: false);
+        await Apply.WaitClosedAsync();
+        _busy = false;
+        SetStatus(error == null ? $"{vm.T.Title}: done" : $"{vm.T.Title}: failed");
+    }
+
+    string? TryRun(Tweak t)
+    {
+        try { foreach (var a in t.Actions) a.Apply(); return null; }
+        catch (Exception ex) { Log.Error($"Run {t.Id}: {ex}"); return ex.Message; }
+    }
+
+    async Task ToggleAsync(TweakVM vm, bool wantOn)
+    {
+        if (_busy) { vm.SetOn(vm.IsOn); return; }
+
+        if (wantOn)
+        {
+            var parts = new List<string>();
+            if (vm.T.Confirm != null) parts.Add(vm.T.Confirm);
+            if (vm.V.Fit == Fit.Caution && vm.V.Note != null) parts.Add("Heads-up for this PC: " + vm.V.Note);
+
+            if (parts.Count > 0 || vm.T.Risk == Risk.Advanced)
+            {
+                var message = parts.Count > 0 ? string.Join("\n\n", parts) : "This is an advanced change.";
+                if (!Dialogs.Confirm(this, vm.T.Title, message + "\n\nYou can switch it off again afterwards.", "Apply"))
+                {
+                    vm.SetOn(vm.IsOn);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if (vm.T.StoreRestore)
+            {
+                Dialogs.Info(this, vm.T.Title,
+                    "These apps were removed from Windows itself, so the only way back is the Microsoft Store. TrapShack will open it for you.");
+                OpenStore();
+                vm.SetOn(vm.IsOn);
+                return;
+            }
+
+            if (!_engine.HasBackup(vm.T) &&
+                !Dialogs.Confirm(this, vm.T.Title,
+                    "TrapShack didn't make this change, so it has no backup of your original value. " +
+                    "It will be set back to the normal Windows default.", "Restore default"))
+            {
+                vm.SetOn(vm.IsOn);
+                return;
+            }
+        }
+
+        if (wantOn && !await OfferRestorePointAsync())
+        {
+            vm.SetOn(vm.IsOn);
+            return;
+        }
+
+        HideRestartBar();
+        _busy = true;
+        vm.SetBusy(true);
+
+        var acts = vm.T.Actions.Where(a => a.IsApplicable()).Select(a => a.Describe()).ToList();
+        var steps = new List<(string, string)>();
+        for (var i = 0; i < acts.Count; i++)
+            steps.Add((acts.Count == 1 ? vm.T.Title : $"Change {i + 1} of {acts.Count}", acts[i]));
+        steps.Add(("Check the result in Windows", "Reading the setting back"));
+        Apply.Begin(wantOn ? "Applying" : "Restoring", (wantOn ? "Applying: " : "Restoring: ") + vm.T.Title, steps, false);
+
+        var prev = -1;
+        Action<int> onStep = i => Dispatcher.BeginInvoke(() =>
+        {
+            if (prev >= 0) Apply.EndStep(prev, StepResult.Done, "Written");
+            Apply.StartStep(i);
+            prev = i;
+        });
+
+        string? error = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                if (wantOn) _engine.Apply(vm.T, onStep);
+                else _engine.Revert(vm.T, onStep);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Log.Error($"{(wantOn ? "Apply" : "Revert")} {vm.T.Id}: {ex}");
+            }
+        });
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);   // let queued step updates land first
+
+        var verifyIndex = acts.Count;
+        if (prev >= 0) Apply.EndStep(prev, error == null ? StepResult.Done : StepResult.Failed, error == null ? "Written" : null);
+
+        var verified = false;
+        if (error == null)
+        {
+            Apply.StartStep(verifyIndex, "Checking that Windows kept the change");
+            var isOn = await Task.Run(() => _engine.IsApplied(vm.T));
+            vm.SetOn(isOn);
+            verified = isOn == wantOn;
+            Apply.EndStep(verifyIndex, verified ? StepResult.Done : StepResult.Warn);
+        }
+        else vm.SetOn(await Task.Run(() => _engine.IsApplied(vm.T)));
+
+        var needsRestart = wantOn && verified && (vm.T.RestartRequired || vm.T.SignOutRequired);
+        if (error != null)
+            Apply.Finish("Rolled back", "Nothing was changed", "TrapShack put back anything it had already changed. " + error, 0, 0, 1, autoClose: false);
+        else if (!verified)
+            Apply.Finish("Check this setting", vm.T.Title,
+                "Windows accepted the change but the setting still reads as it did. A policy, another program or Windows itself may be overriding it.", 0, 0, 1, autoClose: false);
+        else
+            Apply.Finish("Complete", (wantOn ? "Applied: " : "Restored: ") + vm.T.Title,
+                needsRestart ? "Read back from Windows and confirmed. A restart is needed to finish this." : "Read back from Windows and confirmed.",
+                1, needsRestart ? 1 : 0, 0, autoClose: true);
+
+        await Apply.WaitClosedAsync();
+        vm.SetBusy(false);
+        _busy = false;
+
+        if (error != null) SetStatus("Something went wrong. Details are in the log.");
+        else
+        {
+            SetStatus((wantOn ? "Applied: " : "Restored: ") + vm.T.Title);
+            if (needsRestart) _restartIds.Add(vm.T.Id);
+        }
+        RefreshViews();
+        QueueRestartPrompt();
+    }
+
+    static void OpenStore()
+    {
+        try { Process.Start(new ProcessStartInfo("ms-windows-store://home") { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Error("Could not open the Store: " + ex.Message); }
+    }
+
+    // =============================================================================================
+    // Batches: apply recommended / undo
+    // =============================================================================================
+
+    /// <summary>What "this page" means for the Quick actions menu: one page, or every optimization page on the hub.</summary>
+    Func<TweakVM, bool>? CurrentScope()
+    {
+        if (_page != null) { var key = _page.Key; return v => v.PageKey == key; }
+        if (_hub)
+        {
+            var section = _hubSection;
+            var keys = PageDefs.All.Where(p => p.Section == section).Select(p => p.Key).ToHashSet();
+            return v => keys.Contains(v.PageKey);
+        }
+        return null;
+    }
+
+    DateTime _quickClosed = DateTime.MinValue;
+    const double QuickWidth = 340;
+
+    void OnQuickActions(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement target) return;
+        // Clicking the button while the menu is open closes it (the click-away already did); don't reopen it straight after.
+        if (QuickPop.IsOpen || (DateTime.Now - _quickClosed).TotalMilliseconds < 250) { QuickPop.IsOpen = false; return; }
+        UpdateQuickCounts();
+        QuickPop.PlacementTarget = target;
+        QuickPop.HorizontalOffset = (target.ActualWidth - QuickWidth) * UiScale.ScaleX;   // right edges line up
+        QuickPop.IsOpen = true;
+    }
+
+    /// <summary>The little counters on the Quick actions menu: recommended settings on, and settings changed from the default.</summary>
+    void UpdateQuickCounts()
+    {
+        var scope = CurrentScope();
+        var items = _vms.Where(v => !v.T.OneShot && v.T.ChoiceGroup == null && (scope == null || scope(v))).ToList();
+        var st = Stats(items);
+        var changed = items.Count(v => v.IsOn);
+
+        QuickScope.Text = (_page != null ? _page.Title : "All Optimizations").ToUpperInvariant();
+
+        var allRec = st.RecTotal > 0 && st.RecDone == st.RecTotal;
+        QuickApplyCount.Text = st.RecTotal == 0 ? "none" : allRec ? "all on" : $"{st.RecDone}/{st.RecTotal}";
+        QuickApplyCount.Foreground = (Brush)FindResource(allRec ? "GreenBrush" : "MutedBrush");
+        QuickApplySub.Text = st.RecTotal == 0 ? "Nothing is recommended here"
+                           : allRec ? "Everything recommended is already on"
+                           : $"{st.RecTotal - st.RecDone} still to turn on for this PC";
+        QuickApplyBtn.IsEnabled = st.RecDone < st.RecTotal;
+
+        QuickResetCount.Text = $"{changed}/{items.Count}";
+        QuickResetSub.Text = changed == 0 ? "Everything here is already at the default" : $"{changed} changed setting{(changed == 1 ? "" : "s")} would go back";
+        QuickResetBtn.IsEnabled = changed > 0;
+    }
+
+    void OnApplyAll(object sender, RoutedEventArgs e) => _ = ApplyRecommendedAsync(null);
+    void OnApplyPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = ApplyRecommendedAsync(CurrentScope()); }
+    void OnUndoPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = UndoAsync(CurrentScope(), toDefaults: true); }
+    void OnUndoAll(object sender, RoutedEventArgs e) => _ = UndoAsync(null, toDefaults: false);
+
+    async Task ApplyRecommendedAsync(Func<TweakVM, bool>? scope)
+    {
+        if (_busy) return;
+
+        var todo = _vms.Where(v => (scope == null || scope(v)) && v.V.Fit == Fit.Recommended && !v.IsOn).ToList();
+        if (todo.Count == 0)
+        {
+            Dialogs.Info(this, "Nothing to apply", "Every recommended setting for this PC is already applied.");
+            return;
+        }
+
+        var lines = string.Join("\n", todo.Take(14).Select(v => "•  " + v.T.Title));
+        if (todo.Count > 14) lines += $"\n…and {todo.Count - 14} more";
+
+        if (!Dialogs.Confirm(this, "Apply recommended settings",
+                $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} chosen for this PC " +
+                $"({_sys.OsName}, {_sys.CpuBrand} CPU, {GpuBrand}):\n\n{lines}\n\n" +
+                "A restore point is created first, and every change can be switched off again.", "Apply"))
+            return;
+
+        HideRestartBar();
+        _busy = true;
+        if (!_settings.RestorePointAsked) { _settings.RestorePointAsked = true; _settings.Save(); }   // this run makes one itself
+        var steps = new List<(string, string)> { ("Create a restore point", "Windows System Restore") };
+        steps.AddRange(todo.Select(v => (v.T.Title, v.T.Summary)));
+        Apply.Begin("Applying", "Applying recommended settings", steps, true);
+
+        Apply.StartStep(0);
+        var (ok, message) = await Task.Run(() => RestorePoint.Create());
+        Apply.EndStep(0, ok ? StepResult.Done : StepResult.Warn, ok ? "Created" : "Skipped");
+        if (!ok &&
+            !Dialogs.Confirm(this, "No restore point",
+                $"Windows couldn't create a restore point:\n\n{message}\n\n" +
+                "Every change can still be switched off one by one. Continue without one?", "Continue anyway"))
+        {
+            Apply.Dismiss();
+            _busy = false;
+            return;
+        }
+
+        int good = 0, restart = 0, failed = 0, ran = 0;
+        var problems = new List<string>();
+        for (var i = 0; i < todo.Count; i++)
+        {
+            if (Apply.CancelRequested) break;
+            var vm = todo[i];
+            var row = i + 1;
+            Apply.StartStep(row);
+
+            var error = await Task.Run(() => vm.T.OneShot ? TryRun(vm.T) : TryApply(vm.T));
+            ran++;
+            if (error != null)
+            {
+                failed++;
+                problems.Add($"{vm.T.Title}: {error}");
+                Apply.EndStep(row, StepResult.Failed);
+                continue;
+            }
+
+            var verified = true;
+            if (!vm.T.OneShot)
+            {
+                var isOn = await Task.Run(() => _engine.IsApplied(vm.T));
+                vm.SetOn(isOn);
+                verified = isOn;
+            }
+            if (verified)
+            {
+                good++;
+                if (vm.T.RestartRequired || vm.T.SignOutRequired) { restart++; _restartIds.Add(vm.T.Id); }
+                Apply.EndStep(row, StepResult.Done, vm.T.OneShot ? "Done" : null);
+            }
+            else
+            {
+                failed++;
+                problems.Add($"{vm.T.Title}: Windows still reports the old value");
+                Apply.EndStep(row, StepResult.Warn);
+            }
+        }
+
+        var cancelled = Apply.CancelRequested && ran < todo.Count;
+        var note = cancelled ? $"Stopped after {ran} of {todo.Count}. Everything already applied stays applied. "
+                 : "";
+        if (failed > 0) note += "Problems: " + string.Join("; ", problems.Take(2)) + (problems.Count > 2 ? $" and {problems.Count - 2} more. Details are in the log." : ".");
+        if (note.Length == 0) note = "Everything was applied and read back from Windows.";
+
+        Apply.Finish(cancelled ? "Stopped" : failed > 0 ? "Finished with problems" : "Complete",
+            cancelled ? "Stopped early" : failed > 0 ? "Some settings need attention" : "All settings applied",
+            note.Trim(), good, restart, failed, autoClose: !cancelled && failed == 0);
+        await Apply.WaitClosedAsync();
+        _busy = false;
+        RefreshViews();
+        SetStatus($"Applied {good} of {todo.Count} recommended settings");
+        QueueRestartPrompt();
+    }
+
+    string? TryApply(Tweak t)
+    {
+        try { _engine.Apply(t); return null; }
+        catch (Exception ex)
+        {
+            Log.Error($"Apply {t.Id}: {ex}");
+            return ex.Message;
+        }
+    }
+
+    async Task UndoAsync(Func<TweakVM, bool>? scope, bool toDefaults)
+    {
+        if (_busy) return;
+
+        var candidates = _vms.Where(v => (scope == null || scope(v)) && v.IsOn && (toDefaults || _engine.HasBackup(v.T))).ToList();
+        var todo = candidates.Where(v => !v.T.StoreRestore).ToList();
+        var storeOnly = candidates.Count - todo.Count;
+
+        if (todo.Count == 0)
+        {
+            Dialogs.Info(this, "Nothing to undo",
+                storeOnly > 0
+                    ? "The only changes left were removed apps, which can only be reinstalled from the Microsoft Store."
+                    : toDefaults ? "Everything here is already at its Windows default." : "TrapShack hasn't changed anything here yet.");
+            return;
+        }
+
+        var lines = string.Join("\n", todo.Take(14).Select(v => "•  " + v.T.Title));
+        if (todo.Count > 14) lines += $"\n…and {todo.Count - 14} more";
+        var extra = storeOnly > 0 ? $"\n\n{storeOnly} removed-app change{(storeOnly == 1 ? "" : "s")} can't be undone here. Reinstall those from the Microsoft Store." : "";
+
+        if (!Dialogs.Confirm(this, "Undo changes",
+                (toDefaults
+                    ? $"TrapShack will set {todo.Count} setting{(todo.Count == 1 ? "" : "s")} back to how they were before TrapShack changed them, or to the Windows default if TrapShack never touched them:\n\n{lines}{extra}"
+                    : $"TrapShack will put {todo.Count} setting{(todo.Count == 1 ? "" : "s")} back exactly as they were before:\n\n{lines}{extra}"), toDefaults ? "Revert" : "Undo"))
+            return;
+
+        HideRestartBar();
+        _busy = true;
+        Apply.Begin("Restoring", toDefaults ? "Back to Windows defaults" : "Undoing your changes",
+            todo.Select(v => (v.T.Title, v.T.Summary)).ToList(), true);
+
+        int restored = 0, failed = 0, ranCount = 0, restartCount = 0;
+        var problems = new List<string>();
+        for (var i = 0; i < todo.Count; i++)
+        {
+            if (Apply.CancelRequested) break;
+            var vm = todo[i];
+            Apply.StartStep(i);
+
+            var error = await Task.Run(() =>
+            {
+                try { _engine.Revert(vm.T); return (string?)null; }
+                catch (Exception ex) { Log.Error($"Revert {vm.T.Id}: {ex}"); return ex.Message; }
+            });
+            ranCount++;
+
+            var isOn = await Task.Run(() => _engine.IsApplied(vm.T));
+            vm.SetOn(isOn);
+            if (error == null && !isOn)
+            {
+                restored++;
+                if (vm.T.RestartRequired || vm.T.SignOutRequired) { restartCount++; _restartIds.Add(vm.T.Id); }
+                Apply.EndStep(i, StepResult.Done);
+            }
+            else
+            {
+                failed++;
+                problems.Add($"{vm.T.Title}: {error ?? "Windows still reports the changed value"}");
+                Apply.EndStep(i, error == null ? StepResult.Warn : StepResult.Failed);
+            }
+        }
+
+        var stopped = Apply.CancelRequested && ranCount < todo.Count;
+        var note = stopped ? $"Stopped after {ranCount} of {todo.Count}. " : "";
+        if (failed > 0) note += "Problems: " + string.Join("; ", problems.Take(2)) + (problems.Count > 2 ? $" and {problems.Count - 2} more." : ".");
+        if (note.Length == 0) note = "Everything was restored and read back from Windows.";
+
+        Apply.Finish(stopped ? "Stopped" : failed > 0 ? "Finished with problems" : "Complete",
+            stopped ? "Stopped early" : failed > 0 ? "Some settings could not be restored" : "Restored",
+            note.Trim(), restored, restartCount, failed, autoClose: !stopped && failed == 0);
+        await Apply.WaitClosedAsync();
+        _busy = false;
+        RefreshViews();
+        SetStatus($"Restored {restored} settings");
+        QueueRestartPrompt();
+    }
+
+    async void OnRestorePoint(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        _busy = true;
+        ShowBusy("Creating a restore point…");
+        var (ok, message) = await Task.Run(() => RestorePoint.Create());
+        _busy = false;
+        HideBusy();
+        Dialogs.Info(this, ok ? "Restore point created" : "No restore point",
+            ok ? "If anything ever goes wrong you can roll back from Windows' System Restore."
+               : "Windows couldn't create one:\n\n" + message);
+    }
+
+    // =============================================================================================
+    // Window chrome
+    // =============================================================================================
+
+    void ShowBusy(string text) { BusyText.Text = text; BusyOverlay.Visibility = Visibility.Visible; }
+    void SetBusyText(string text) => BusyText.Text = text;
+    void HideBusy() => BusyOverlay.Visibility = Visibility.Collapsed;
+    void SetStatus(string text) => StatusText.Text = text;
+
+    void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    void OnMaximize(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    void OnClose(object sender, RoutedEventArgs e)
+    {
+        if (_busy && !Dialogs.Confirm(this, "TrapShack is still working",
+                "Closing now could interrupt a change in progress. Close anyway?", "Close anyway"))
+            return;
+        StopSensors();
+        _sensors?.Dispose();
+        Close();
+    }
+
+    // =============================================================================================
+    // Restart prompt and the one-time restore point question
+    // =============================================================================================
+
+    /// <summary>
+    /// Shows the restart prompt only after every queued change has finished and the progress panel has had a moment
+    /// on screen, so nobody clicks it by accident while work is still running.
+    /// </summary>
+    async void QueueRestartPrompt()
+    {
+        if (_busy || _restartIds.Count == 0) return;
+        await Task.Delay(1600);
+        if (_busy || _restartIds.Count == 0) return;
+
+        Apply.Dismiss();
+        _restartArmed = false;
+        var n = _restartIds.Count;
+        RestartTitle.Text = "Restart to finish";
+        RestartSub.Text = _restartNote ?? $"{n} change{(n == 1 ? "" : "s")} take{(n == 1 ? "s" : "")} effect after a restart. Save your work first.";
+        RestartLaterBtn.Content = "Later";
+        RestartNowBtn.Content = "Restart now";
+        RestartNowBtn.IsEnabled = false;
+        RestartBar.Visibility = Visibility.Visible;
+        RestartBar.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220)));
+
+        await Task.Delay(1800);   // the button stays greyed out for a moment
+        if (!_busy && RestartBar.Visibility == Visibility.Visible) RestartNowBtn.IsEnabled = true;
+    }
+
+    // ---- IPageHost: what the Apps pages use ----
+    Window IPageHost.Win => this;
+    Settings IPageHost.Cfg => _settings;
+    ProgressDock IPageHost.Dock => Apply;
+    bool IPageHost.Busy { get => _busy; set => _busy = value; }
+
+    void IPageHost.SuggestRestart(string text)
+    {
+        _restartNote = text;
+        _restartIds.Add("apps.removed");
+        QueueRestartPrompt();
+    }
+
+    void HideRestartBar()
+    {
+        _restartNote = null;
+        _restartIds.Remove("apps.removed");
+        RestartBar.BeginAnimation(OpacityProperty, null);
+        RestartBar.Opacity = 0;
+        RestartBar.Visibility = Visibility.Collapsed;
+        _restartArmed = false;
+    }
+
+    void OnRestartLater(object sender, RoutedEventArgs e)
+    {
+        if (_restartArmed)
+        {
+            // Backed out of the "are you sure" step: go back to the first state.
+            _restartArmed = false;
+            var n = _restartIds.Count;
+            RestartSub.Text = _restartNote ?? $"{n} change{(n == 1 ? "" : "s")} take{(n == 1 ? "s" : "")} effect after a restart. Save your work first.";
+            RestartLaterBtn.Content = "Later";
+            RestartNowBtn.Content = "Restart now";
+            return;
+        }
+        HideRestartBar();
+    }
+
+    async void OnRestartNow(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        if (!_restartArmed)
+        {
+            _restartArmed = true;
+            RestartSub.Text = "Windows will restart in 10 seconds. Anything unsaved will be lost.";
+            RestartLaterBtn.Content = "Cancel";
+            RestartNowBtn.Content = "Yes, restart";
+            RestartNowBtn.IsEnabled = false;
+            await Task.Delay(900);
+            if (_restartArmed) RestartNowBtn.IsEnabled = true;
+            return;
+        }
+        HideRestartBar();
+        Shell.Run("shutdown.exe", "/r /t 10 /c \"TrapShack Tweak Utility: finishing your changes\"", 15_000);
+    }
+
+    /// <summary>
+    /// Asked once, before the very first change. Either answer is remembered, so this never nags.
+    /// Returns false only if the window was closed in a way that should cancel the change.
+    /// </summary>
+    async Task<bool> OfferRestorePointAsync()
+    {
+        if (_settings.RestorePointAsked) return true;
+        _settings.RestorePointAsked = true;
+        _settings.Save();
+
+        if (!Dialogs.Confirm(this, "Create a restore point first?",
+                "It takes about 20 seconds and lets you roll Windows back if anything misbehaves. You will only be asked this once.",
+                "Create restore point", "Skip"))
+            return true;
+
+        HideRestartBar();
+        _busy = true;
+        Apply.Begin("Restore point", "Creating a restore point",
+            new List<(string, string)> { ("Windows is saving a rollback point", "Windows System Restore") }, false);
+        Apply.StartStep(0);
+        var (ok, message) = await Task.Run(() => RestorePoint.Create());
+        Apply.EndStep(0, ok ? StepResult.Done : StepResult.Warn);
+        if (ok) Apply.Finish("Complete", "Restore point created", "Windows saved a rollback point.", 1, 0, 0, autoClose: true);
+        else Apply.Finish("Skipped", "No restore point", "Windows couldn't create one: " + message, 0, 0, 1, autoClose: false);
+        _busy = false;
+        return true;
+    }
+
+    // Everything is laid out for a 1280 x 800 window and scaled smoothly to the real window: smaller in small windows (so
+    // pages fit without scrolling), larger on big screens. Cards re-flow by width on their own (see AdaptiveGrid), so the
+    // scale only has to keep text a readable size. The Quick actions menu and the detail pop-ups live in their own
+    // windows, so they read the same factor from the UiScaleFactor resource.
+    const double DesignW = 1280, DesignH = 800;
+
+    void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var w = Math.Max(1, ActualWidth - (WindowState == WindowState.Maximized ? 14 : 0));
+        var h = Math.Max(1, ActualHeight - (WindowState == WindowState.Maximized ? 14 : 0));
+        var raw = Math.Min(w / DesignW, h / DesignH);
+        var scale = Math.Clamp(Math.Round(raw * 40) / 40, 0.7, 1.6);   // steps of 0.025 keep text sharp
+        if (Math.Abs(UiScale.ScaleX - scale) < 0.001) return;
+        UiScale.ScaleX = scale; UiScale.ScaleY = scale;
+        Application.Current.Resources["UiScaleFactor"] = scale;
+    }
+
+    bool _effectsReady;
+
+    void OnEffectsToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_effectsReady) return;
+        var on = EffectsCheck.IsChecked == true;
+        _settings.LiveEffects = on; _settings.Save();
+        Fx.On = on;
+        Fx.Haze(Haze, on);
+    }
+
+    void OnStateChanged(object? sender, EventArgs e)
+    {
+        var max = WindowState == WindowState.Maximized;
+        RootGrid.Margin = max ? new Thickness(7) : new Thickness(0);
+        MaxButton.Content = max ? "" : "";
+    }
+
+    // =============================================================================================
+    // System info (live sensors) and accent colour
+    // =============================================================================================
+
+    Sensors? _sensors;
+    DispatcherTimer? _liveTimer;
+    bool _sensorsStarted;
+    bool _sensorsFailed;
+    readonly Settings _settings = Settings.Load();
+
+    async void ShowSystem()
+    {
+        ShowPanel(SystemPanel);
+        LiveNote.Text = "Reading sensors…";
+        LiveList.ItemsSource = null;
+        FillSystemHeader();
+
+        var infoTask = Task.Run(() => HardwareInfo.Collect(_sys));
+
+        if (!_sensorsStarted)
+        {
+            _sensorsStarted = true;
+            _sensors = new Sensors();
+            _sensorsFailed = !await Task.Run(() => _sensors.Start());
+        }
+
+        if (!SystemPanel.IsVisible) return;   // user already left the page
+        if (_sensorsFailed)
+            LiveNote.Text = "Live sensors could not start on this PC (" + (_sensors?.Problem ?? "unknown reason") + "). System details below still work.";
+        else
+            StartLiveTimer();
+
+        try { InfoList.ItemsSource = await infoTask; }
+        catch (Exception ex) { Log.Error("System info failed: " + ex.Message); }
+    }
+
+    void StartLiveTimer()
+    {
+        _liveTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _liveTimer.Tick -= OnLiveTick;
+        _liveTimer.Tick += OnLiveTick;
+        _liveTimer.Start();
+        OnLiveTick(null, EventArgs.Empty);
+    }
+
+    bool _liveBusy;
+
+    async void OnLiveTick(object? sender, EventArgs e)
+    {
+        if (_sensors == null || _liveBusy) return;
+        _liveBusy = true;
+        try
+        {
+            var readings = await Task.Run(() => _sensors.Read());
+            if (!SystemPanel.IsVisible) return;
+            LiveList.ItemsSource = GroupReadings(readings);
+            var hasCpuTemp = readings.Any(r => r.Label.StartsWith("CPU") && r.Label.EndsWith("temperature"));
+            LiveNote.Text = readings.Count == 0
+                ? "No sensors reported anything. Virtual machines and some laptops hide them."
+                : hasCpuTemp ? "Updates every second."
+                : "Updates every second. This CPU did not report a temperature; reading it needs the PawnIO driver (pawnio.eu), which can be installed once.";
+        }
+        catch (Exception ex) { Log.Error("Live update failed: " + ex.Message); }
+        finally { _liveBusy = false; }
+    }
+
+
+    void FillSystemHeader()
+    {
+        SysName.Text = Environment.MachineName.ToUpperInvariant();
+        var gpu = _sys.Gpus.FirstOrDefault() ?? "";
+        SysLine.Text = string.Join("  ·  ", new[] { _sys.OsName, _sys.Cpu, gpu, _sys.RamGb > 0 ? $"{Math.Round(_sys.RamGb)} GB RAM" : "" }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+        var chips = new List<string> { _sys.IsLaptop ? "Laptop" : "Desktop", Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit" };
+        if (_sys.Build > 0) chips.Add("Build " + _sys.Build + (_sys.Ubr > 0 ? "." + _sys.Ubr : ""));
+        if (_sys.IsVirtualMachine) chips.Add("Virtual machine");
+        if (_sys.DomainJoined) chips.Add("Domain joined");
+        chips.Add("Up " + FormatUptime(TimeSpan.FromMilliseconds(Environment.TickCount64)));
+        SysChips.ItemsSource = chips;
+    }
+
+    static string FormatUptime(TimeSpan t) =>
+        t.TotalDays >= 1 ? $"{(int)t.TotalDays} d {t.Hours} h" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} h {t.Minutes} min" : $"{t.Minutes} min";
+
+    /// <summary>Groups flat sensor readings into CPU / GPU / memory cards: one headline figure, a usage bar and the rest as rows.</summary>
+    static List<LiveGroup> GroupReadings(List<SensorReading> readings)
+    {
+        static string Cap(string w) => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w[1..];
+        var result = new List<LiveGroup>();
+        // "CPU temperature", "GPU 2 load", "RAM used": everything before the last word names the device.
+        foreach (var g in readings.GroupBy(r => r.Label.Contains(' ') ? r.Label[..r.Label.LastIndexOf(' ')] : r.Label))
+        {
+            var rows = g.ToList();
+            var temp = rows.FirstOrDefault(r => r.Label.EndsWith("temperature"));
+            var load = rows.FirstOrDefault(r => r.Pct >= 0);
+            var head = temp?.Value ?? load?.Value ?? rows[0].Value;
+            var shown = rows.Where(r => r != temp)
+                .Select(r => r with { Label = Cap(r.Label[(r.Label.LastIndexOf(' ') + 1)..]) }).ToList();
+            if (temp != null) shown.Insert(0, new SensorReading("Temperature", temp.Value, temp.Hot));
+            var title = g.Key == "RAM" ? "MEMORY" : g.Key.ToUpperInvariant();
+            result.Add(new LiveGroup(title, head, load?.Pct ?? -1, rows.Any(r => r.Hot), shown.Where(r => r.Value != head).ToList()));
+        }
+        return result;
+    }
+
+    // ---------- updates ----------
+    UpdateInfo? _update;
+
+    void ShowUpdateSetting()
+    {
+        UpdVersion.Text = "Version " + Updater.CurrentText;
+        UpdRepo.Text = _settings.UpdateRepo;
+    }
+
+    void OnUpdRepoChanged(object sender, RoutedEventArgs e)
+    {
+        var v = UpdRepo.Text.Trim();
+        if (v.Length == 0 || v == _settings.UpdateRepo) return;
+        _settings.UpdateRepo = v;
+        _settings.Save();
+        _update = null;
+        UpdInstall.Visibility = Visibility.Collapsed;
+    }
+
+    async void OnCheckUpdate(object sender, RoutedEventArgs e)
+    {
+        OnUpdRepoChanged(sender, e);
+        UpdCheck.IsEnabled = false;
+        UpdInstall.Visibility = Visibility.Collapsed;
+        UpdStatus.Foreground = (Brush)FindResource("MutedBrush");
+        UpdStatus.Text = "Checking GitHub…";
+        try
+        {
+            _update = await Updater.CheckAsync(_settings.UpdateRepo);
+            if (_update == null)
+            {
+                UpdStatus.Foreground = (Brush)FindResource("GreenBrush");
+                UpdStatus.Text = "You are on the latest version.";
+            }
+            else
+            {
+                UpdStatus.Foreground = (Brush)FindResource("AmberBrush");
+                UpdStatus.Text = "Version " + _update.Latest.ToString(3) + " is available.";
+                UpdInstall.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update check failed: " + ex.Message);
+            UpdStatus.Text = ex is HttpRequestException ? "Could not reach GitHub. Check your internet connection." : ex.Message;
+        }
+        finally { UpdCheck.IsEnabled = true; }
+    }
+
+    async void OnInstallUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_update == null) return;
+        if (!Dialogs.Confirm(this, "Update TrapShack", "TrapShack will download version " + _update.Latest.ToString(3) + ", close, and open again by itself. Your settings and undo data are kept.", "Update now", "Not now")) return;
+        UpdInstall.IsEnabled = false; UpdCheck.IsEnabled = false;
+        UpdBar.Value = 0; UpdBar.Visibility = Visibility.Visible;
+        UpdStatus.Foreground = (Brush)FindResource("MutedBrush");
+        UpdStatus.Text = "Downloading…";
+        try
+        {
+            var file = await Updater.DownloadAsync(_update, new Progress<(long Done, long Total)>(p =>
+            {
+                if (p.Total <= 0) { UpdStatus.Text = "Downloading… " + WingetService.FormatMb(p.Done); return; }
+                var f = (double)p.Done / p.Total; UpdBar.Value = f;
+                UpdStatus.Text = $"Downloading…  {WingetService.FormatPair(p.Done, p.Total)}  ·  {(int)(f * 100)}%";
+            }));
+            UpdStatus.Text = "Installing and restarting…";
+            Updater.StartSwap(file);
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update failed: " + ex.Message);
+            UpdStatus.Text = "The update did not work: " + ex.Message;
+            UpdBar.Visibility = Visibility.Collapsed;
+            UpdInstall.IsEnabled = true; UpdCheck.IsEnabled = true;
+        }
+    }
+
+    void StopSensors() => _liveTimer?.Stop();
+
+    readonly HsvState _hsv = new();
+
+    /// <summary>Called when Settings opens: puts the wheel, brightness bar, hex box and swatches on the saved accent.</summary>
+    void BuildSwatches()
+    {
+        AccentTheme.TryParse(_settings.Accent, out var current);
+        _hsv.Set(current);
+        ShowAccent(current);
+        AccentHexNote.Text = "Type a hex code and press Enter, or pick a ready-made colour:";
+
+        SwatchRow.Children.Clear();
+        foreach (var (name, hex) in AccentTheme.Swatches)
+        {
+            AccentTheme.TryParse(hex, out var c);
+            var selected = c == current;
+            var b = new Button
+            {
+                Width = 28, Height = 28, Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = name, Tag = hex,
+                Background = new SolidColorBrush(c), BorderThickness = new Thickness(selected ? 3 : 1),
+                BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x3B)),
+                Template = SwatchTemplate(),
+            };
+            b.Click += (_, _) => SetAccent(hex);
+            SwatchRow.Children.Add(b);
+        }
+    }
+
+    static ControlTemplate SwatchTemplate()
+    {
+        var t = new ControlTemplate(typeof(Button));
+        var f = new FrameworkElementFactory(typeof(Border));
+        f.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
+        f.SetBinding(Border.BackgroundProperty, new Binding("Background") { RelativeSource = RelativeSource.TemplatedParent });
+        f.SetBinding(Border.BorderBrushProperty, new Binding("BorderBrush") { RelativeSource = RelativeSource.TemplatedParent });
+        f.SetBinding(Border.BorderThicknessProperty, new Binding("BorderThickness") { RelativeSource = RelativeSource.TemplatedParent });
+        t.VisualTree = f;
+        return t;
+    }
+
+    void ShowAccent(Color c)
+    {
+        AccentHex.Text = AccentTheme.ToHex(c);
+        AccentPreview.Background = new SolidColorBrush(c);
+        Wheel.Redraw(); ValueBar.Redraw();
+    }
+
+    /// <summary>While dragging on the wheel or the brightness bar: recolour the whole app live.</summary>
+    void OnAccentPicking()
+    {
+        var c = _hsv.Color;
+        AccentTheme.Apply(c);
+        ShowAccent(c);
+    }
+
+    void OnAccentPicked()
+    {
+        var c = _hsv.Color;
+        _settings.Accent = AccentTheme.ToHex(c); _settings.Save();
+        AccentHexNote.Text = "Saved. This colour will be used next time too.";
+        BuildSwatches();
+    }
+
+    void SetAccent(string hex)
+    {
+        if (!AccentTheme.TryParse(hex, out var c))
+        {
+            AccentHexNote.Text = "That is not a valid colour. Use six hex digits, like #E5213B.";
+            return;
+        }
+        _hsv.Set(c);
+        AccentTheme.Apply(c);
+        _settings.Accent = AccentTheme.ToHex(c);
+        _settings.Save();
+        BuildSwatches();
+        AccentHexNote.Text = "Saved. This colour will be used next time too.";
+    }
+
+    void OnThemeClick(object sender, RoutedEventArgs e) => SelectNav("settings");
+
+    void ShowRestorePointSetting() =>
+        RpSettingNote.Text = _settings.RestorePointAsked
+            ? "TrapShack asks once, before your first change, whether to create a restore point. That question has been answered."
+            : "TrapShack will ask once, before your first change, whether to create a restore point.";
+
+    void OnAskRestorePointAgain(object sender, RoutedEventArgs e)
+    {
+        _settings.RestorePointAsked = false;
+        _settings.Save();
+        ShowRestorePointSetting();
+    }
+
+    void OnAccentHexKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) SetAccent(AccentHex.Text);
+    }
+
+    void OnAccentHexLost(object sender, RoutedEventArgs e)
+    {
+        if (AccentTheme.TryParse(AccentHex.Text, out var c) && AccentTheme.ToHex(c) != _settings.Accent) SetAccent(AccentHex.Text);
+    }
+
+    // =============================================================================================
+    // Silent re-check: keeps every switch matching what Windows really has, with no UI noise.
+    // =============================================================================================
+
+    DispatcherTimer? _recheckTimer;
+    DateTime _lastCheck = DateTime.MinValue;
+    DateTime _lastDeepCheck = DateTime.Now;
+    bool _rechecking;
+
+    void StartSilentRecheck()
+    {
+        _recheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        _recheckTimer.Tick += (_, _) => _ = SilentRecheckAsync();
+        _recheckTimer.Start();
+        Activated += (_, _) => _ = SilentRecheckAsync();
+    }
+
+    async Task SilentRecheckAsync()
+    {
+        // Never while something is being changed, and never more than about once every 20 seconds.
+        if (_busy || _rechecking || !_loaded || _vms.Count == 0) return;
+        if ((DateTime.Now - _lastCheck).TotalSeconds < 20) return;
+        _rechecking = true;
+        try
+        {
+            var deep = (DateTime.Now - _lastDeepCheck).TotalMinutes >= 10;
+            var vms = _vms.ToList();
+            var states = await Task.Run(() =>
+            {
+                if (deep) { try { Caches.RefreshTasks(); Caches.RefreshAppx(); } catch (Exception ex) { Log.Error("Cache refresh: " + ex.Message); } }
+                return vms.Select(v => { try { return (bool?)_engine.IsApplied(v.T); } catch { return null; } }).ToList();
+            });
+            if (deep) _lastDeepCheck = DateTime.Now;
+            if (_busy) return;   // something started while we were reading: those results may be stale
+
+            var changed = false;
+            for (var i = 0; i < vms.Count; i++)
+            {
+                if (states[i] is bool on && on != vms[i].IsOn && !vms[i].T.OneShot) { vms[i].SetOn(on); changed = true; }
+            }
+            _lastCheck = DateTime.Now;
+            if (changed) RefreshViews();
+        }
+        catch (Exception ex) { Log.Error("Silent re-check failed: " + ex.Message); }
+        finally { _rechecking = false; }
+    }
+}
