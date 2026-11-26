@@ -164,15 +164,48 @@ if (" + (Is24H2OrNewer ? "$true" : "$false") + @") {
             foreach (var n in cls.GetSubKeyNames())
             {
                 if (!n.All(char.IsDigit)) continue;
-                using var k = cls.OpenSubKey(n);
-                var desc = k?.GetValue("DriverDesc") as string;
-                if (!string.IsNullOrWhiteSpace(desc) && !desc.Contains("Basic", StringComparison.OrdinalIgnoreCase))
-                    list.Add(desc.Trim());
+                try
+                {
+                    using var k = cls.OpenSubKey(n);
+                    var desc = k?.GetValue("DriverDesc") as string;
+                    if (!string.IsNullOrWhiteSpace(desc) && !desc.Contains("Basic", StringComparison.OrdinalIgnoreCase))
+                        list.Add(desc.Trim());
+                }
+                catch { /* one adapter key we can't read: try the rest */ }
             }
         }
         catch { /* best effort */ }
-        return list.Distinct().ToList();
+
+        // second source: the display adapters Windows is driving right now (works even when the registry keys are locked)
+        try
+        {
+            var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+            for (uint i = 0; EnumDisplayDevices(null, i, ref dd, 0); i++)
+            {
+                var name = dd.DeviceString?.Trim();
+                if (!string.IsNullOrEmpty(name) && !name.Contains("Basic", StringComparison.OrdinalIgnoreCase)
+                    && !name.Contains("Remote", StringComparison.OrdinalIgnoreCase))
+                    list.Add(name);
+                dd.cb = Marshal.SizeOf<DISPLAY_DEVICE>();
+            }
+        }
+        catch { /* best effort */ }
+        return list.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public int StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern bool EnumDisplayDevices(string? device, uint index, ref DISPLAY_DEVICE dd, uint flags);
 
     // --- native ------------------------------------------------------------------------------
 

@@ -17,9 +17,12 @@ $m = @(Get-CimInstance Win32_PhysicalMemory)
 $d = @(Get-PhysicalDisk -ErrorAction SilentlyContinue)
 $os = Get-CimInstance Win32_OperatingSystem
 $mon = @(Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue)
+$vr = @(Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11cd-be05-08002be10318}\0*' -ErrorAction SilentlyContinue |
+       Where-Object { $_.'HardwareInformation.qwMemorySize' } | ForEach-Object { [pscustomobject]@{ name=$_.DriverDesc; mem=$(try { [double]$_.'HardwareInformation.qwMemorySize' } catch { 0 }) } })
 [pscustomobject]@{
   cpu = [pscustomobject]@{ name=$c.Name.Trim(); cores=$c.NumberOfCores; threads=$c.NumberOfLogicalProcessors; mhz=$c.MaxClockSpeed; l3=$c.L3CacheSize; socket=$c.SocketDesignation }
-  gpu = @($g | ForEach-Object { [pscustomobject]@{ name=$_.Name; driver=$_.DriverVersion; vram=$_.AdapterRAM; w=$_.CurrentHorizontalResolution; h=$_.CurrentVerticalResolution; hz=$_.CurrentRefreshRate } })
+  gpu = @($g | ForEach-Object { $n = $_.Name; $real = ($vr | Where-Object { $_.name -eq $n } | Select-Object -First 1).mem
+                                [pscustomobject]@{ name=$n; driver=$_.DriverVersion; vram=$(if ($real) { $real } else { $_.AdapterRAM }); w=$_.CurrentHorizontalResolution; h=$_.CurrentVerticalResolution; hz=$_.CurrentRefreshRate } })
   board = ""$($b.Manufacturer) $($b.Product)"".Trim()
   bios = ""$($bios.SMBIOSBIOSVersion)  ($($bios.ReleaseDate.ToString('yyyy-MM-dd')))""
   ram = @($m | ForEach-Object { [pscustomobject]@{ cap=$_.Capacity; mhz=$_.ConfiguredClockSpeed; maker=$_.Manufacturer; part=$_.PartNumber } })
@@ -72,7 +75,7 @@ $mon = @(Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue)
         var cpuRows = new List<InfoRow>
         {
             new("Model", S(cpu, "name")),
-            new("Cores / threads", $"{N(cpu, "cores"):0} / {N(cpu, "threads"):0}"),
+            new("Cores", $"{N(cpu, "cores"):0} cores  ·  {N(cpu, "threads"):0} threads"),
             new("Base clock", $"{N(cpu, "mhz") / 1000.0:0.00} GHz"),
         };
         if (N(cpu, "l3") > 0) cpuRows.Add(new("L3 cache", $"{N(cpu, "l3") / 1024.0:0.#} MB"));
@@ -91,8 +94,9 @@ $mon = @(Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue)
             gpuRows.Add(new("Graphics" + tag, name));
             gpuRows.Add(new("Driver" + tag, S(g, "driver")));
             var vram = N(g, "vram");
-            // Win32_VideoController.AdapterRAM is a 32-bit field and tops out at 4 GB, so only show it when it is plausible.
-            if (vram > 0 && vram < 4294967295.0) gpuRows.Add(new("Video memory" + tag, $"{vram / 1073741824.0:0.#} GB"));
+            // the real size comes from the driver's registry entry; Win32_VideoController.AdapterRAM is 32-bit and stops
+            // just under 4 GB, so a value in that last stretch is the cap, not the card, and is left out
+            if (vram > 0 && (vram < 4.0e9 || vram >= 4294967296.0)) gpuRows.Add(new("VRAM" + tag, $"{vram / 1073741824.0:0.#} GB"));
             if (N(g, "w") > 0) gpuRows.Add(new("Display" + tag, $"{N(g, "w"):0} × {N(g, "h"):0} @ {N(g, "hz"):0} Hz"));
         }
         if (gpuRows.Count > 0) result.Add(new InfoSection("Graphics", "", gpuRows));
@@ -119,8 +123,15 @@ $mon = @(Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue)
 
         // ---- Storage
         var diskRows = new List<InfoRow>();
+        var di = 0;
         foreach (var d in Items(root.GetProperty("disks")))
-            diskRows.Add(new(S(d, "name"), $"{N(d, "size") / 1e9:0} GB  ·  {S(d, "type")}  ·  {S(d, "bus")}  ·  {S(d, "health")}"));
+        {
+            // name on one line, the facts under it, so nothing gets cut off
+            di++;
+            var size = N(d, "size") / 1e9;
+            var sizeText = size >= 1000 ? $"{size / 1000:0.#} TB" : $"{size:0} GB";
+            diskRows.Add(new($"Drive {di}", $"{S(d, "name")}\n{sizeText} {S(d, "type")}  ·  {S(d, "bus")}  ·  {S(d, "health")}"));
+        }
         if (diskRows.Count > 0) result.Add(new InfoSection("Storage", "", diskRows));
 
         return result;

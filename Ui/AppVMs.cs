@@ -19,17 +19,31 @@ public abstract class Notify : INotifyPropertyChanged
 }
 
 /// <summary>Draws the logo tile for an app: the brand mark on the brand colour, or a clean monogram when there is no mark.</summary>
-public sealed class TileArt
+public sealed class TileArt : Notify
 {
     public Geometry? Icon { get; }
-    public Brush Tile { get; }
+    Brush _tile = Brushes.Transparent;
+    public Brush Tile { get => _tile; private set => Set(ref _tile, value); }
     public Brush Glyph { get; }
     public string Mono { get; }
     public System.Windows.Media.ImageSource? Photo { get; }
     public bool HasIcon => Icon != null;
+
+    System.Windows.Media.ImageSource? _real;
+    /// <summary>The installed program's own icon, used when there is no logo file or brand mark (instead of a monogram).</summary>
+    public System.Windows.Media.ImageSource? RealIcon => _real;
+    public bool NeedsRealIcon => Photo == null && Icon == null;
+    public void UseRealIcon(System.Windows.Media.ImageSource img)
+    {
+        if (!NeedsRealIcon) return;
+        _real = img;
+        Tile = Application.Current?.TryFindResource("CardHoverBrush") as Brush ?? Tile;
+        Raise(nameof(RealIcon)); Raise(nameof(RealVisible)); Raise(nameof(MonoVisible));
+    }
+    public Visibility RealVisible => _real != null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility PhotoVisible => Photo != null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility IconVisible => Photo == null && HasIcon ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility MonoVisible => Photo == null && !HasIcon ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility MonoVisible => Photo == null && !HasIcon && _real == null ? Visibility.Visible : Visibility.Collapsed;
 
     static double Lum(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
 
@@ -227,7 +241,7 @@ public sealed class WinAppVM : Notify
     public Visibility HasArt => _art != null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility HasPhoto => _photo != null && _art == null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility NoPhoto => _photo == null && _art == null ? Visibility.Visible : Visibility.Collapsed;
-    public Brush TileBg => _art != null ? Brushes.Transparent : _photo != null ? PhotoTile : Tile;
+    public Brush TileBg => _art != null ? Brushes.Transparent : _photo != null ? (Application.Current?.TryFindResource("CardHoverBrush") as Brush ?? PhotoTile) : Tile;
     public Brush Tile { get; }
     public Brush GlyphFg { get; }
     /// <summary>The little label under the tick box is only shown when it matters: core apps, apps that can't come back, locked apps.</summary>

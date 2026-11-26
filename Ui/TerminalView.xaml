@@ -4,6 +4,12 @@
              xmlns:ui="clr-namespace:TrapShack.Ui">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="B2V"/>
+        <!-- the terminal keeps its dark look in both themes: its own copies of the text colours -->
+        <SolidColorBrush x:Key="TextBrush" Color="#F4F4F6"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#9A9AA7"/>
+        <SolidColorBrush x:Key="FaintBrush" Color="#686873"/>
+        <SolidColorBrush x:Key="GreenBrush" Color="#3DD68C"/>
+        <SolidColorBrush x:Key="AmberBrush" Color="#F5A524"/>
 
         <!-- small square icon buttons in the title bar -->
         <Style x:Key="TermBtn" TargetType="Button">
@@ -38,11 +44,11 @@
                 <DataTrigger Binding="{Binding Kind}" Value="Command">
                     <Setter TargetName="Txt" Property="Foreground" Value="White"/>
                     <Setter TargetName="Txt" Property="FontWeight" Value="SemiBold"/>
-                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource TermAccentBrush}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Kind}" Value="Info">
                     <Setter TargetName="Txt" Property="Foreground" Value="{StaticResource MutedBrush}"/>
-                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                    <Setter TargetName="Mark" Property="Foreground" Value="{DynamicResource TermAccentBrush}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Kind}" Value="Success">
                     <Setter TargetName="Txt" Property="Foreground" Value="{StaticResource GreenBrush}"/>
@@ -57,7 +63,7 @@
                     <Setter TargetName="Mark" Property="Foreground" Value="#FF7A85"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsLive}" Value="True">
-                    <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                    <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource TermAccentBrush}"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -73,7 +79,7 @@
             </Grid.RowDefinitions>
 
             <!-- title bar -->
-            <Border x:Name="TitleBar" Padding="12,9,8,9">
+            <Border x:Name="TitleBar" Padding="12,9,8,9" MouseLeftButtonDown="OnTitleDown">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                         <GradientStop Color="{DynamicResource AccentDeepColor}" Offset="0"/>
@@ -85,7 +91,7 @@
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0">
-                        <TextBlock Text="&#xE756;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
+                        <TextBlock Text="&#xE756;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource TermAccentBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -110,6 +116,9 @@
                         <Button x:Name="ClearBtn" Style="{StaticResource TermBtn}" ToolTip="Clear" Click="OnClear">
                             <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="12"/>
                         </Button>
+                        <Button x:Name="CloseBtn" Style="{StaticResource TermBtn}" ToolTip="Close" Click="OnCloseClick" Visibility="Collapsed">
+                            <TextBlock Text="&#xE8BB;" FontFamily="{StaticResource IconFont}" FontSize="11"/>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -119,7 +128,7 @@
                     <Rectangle.Fill>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                             <GradientStop Color="{DynamicResource AccentGlowFadeColor}" Offset="0"/>
-                            <GradientStop Color="{DynamicResource AccentHotColor}" Offset="0.5"/>
+                            <GradientStop Color="{DynamicResource TermAccentColor}" Offset="0.5"/>
                             <GradientStop Color="{DynamicResource AccentGlowFadeColor}" Offset="1"/>
                         </LinearGradientBrush>
                     </Rectangle.Fill>
@@ -145,7 +154,7 @@
             <!-- prompt line -->
             <Border Grid.Row="3" Padding="14,6,14,9" BorderBrush="#16161C" BorderThickness="0,1,0,0">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="TrapShack" FontFamily="Cascadia Mono, Consolas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}"/>
+                    <TextBlock Text="TrapShack" FontFamily="Cascadia Mono, Consolas" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TermAccentBrush}"/>
                     <TextBlock Text=" ❯ " FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
                     <TextBlock x:Name="PromptText" FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource FaintBrush}" Text="waiting for a task"/>
                     <Rectangle x:Name="Caret" Width="7" Height="13" Margin="4,1,0,0" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>

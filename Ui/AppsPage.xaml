@@ -8,15 +8,15 @@
 
         <!-- one tile: same look as the setting tiles -->
         <Style x:Key="AppTile" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSoft}"/>
+            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushSoft}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="12,10,10,10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBorderBrush}"/>
                 </Trigger>
             </Style.Triggers>
@@ -30,6 +30,7 @@
                     <Viewbox Width="22" Height="22" Visibility="{Binding Art.IconVisible}">
                         <Path Data="{Binding Art.Icon}" Fill="{Binding Art.Glyph}" Width="24" Height="24" Stretch="Uniform"/>
                     </Viewbox>
+                    <Image Source="{Binding Art.RealIcon}" Visibility="{Binding Art.RealVisible}" Width="28" Height="28" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="{Binding Art.Mono}" Visibility="{Binding Art.MonoVisible}" Foreground="{Binding Art.Glyph}"
                                FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
@@ -49,14 +50,14 @@
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                    MaxHeight="30" LineHeight="15" Margin="0,2,0,0" ToolTip="{Binding Desc}"
                                    Visibility="{Binding HasPhase, Converter={StaticResource InvB2V}}"/>
                         <TextBlock Text="{Binding Phase}" FontSize="11.5" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
                                    Visibility="{Binding HasPhase, Converter={StaticResource B2V}}">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding Failed}" Value="True">
                                             <Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
@@ -73,7 +74,7 @@
                                   IsEnabled="{Binding CanSelect}" Visibility="{Binding NotInstalled, Converter={StaticResource B2V}}"
                                   HorizontalAlignment="Right"/>
                         <StackPanel Visibility="{Binding ShowInstalled}" HorizontalAlignment="Right">
-                            <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{StaticResource GreenBrush}"
+                            <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource GreenBrush}"
                                        HorizontalAlignment="Right" ToolTip="Installed"/>
                             <Button Content="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="11.5" Style="{StaticResource GhostButton}" Padding="6,3" Margin="0,5,0,0"
                                     ToolTip="Uninstall" Click="OnUninstallClick" HorizontalAlignment="Right"
@@ -97,16 +98,16 @@
                                 <CheckBox Style="{StaticResource TsCheck}" Content="64-bit" IsChecked="{Binding Selected, Mode=TwoWay}"
                                           IsEnabled="{Binding CanSelect}" Visibility="{Binding NotInstalled, Converter={StaticResource B2V}}"/>
                                 <StackPanel Orientation="Horizontal" Visibility="{Binding ShowInstalled}" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{StaticResource GreenBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="64-bit" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}" Margin="5,0,0,0"/>
+                                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource GreenBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="64-bit" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="5,0,0,0"/>
                                 </StackPanel>
                             </Grid>
                             <Grid DataContext="{Binding X86}">
                                 <CheckBox Style="{StaticResource TsCheck}" Content="32-bit" IsChecked="{Binding Selected, Mode=TwoWay}"
                                           IsEnabled="{Binding CanSelect}" Visibility="{Binding NotInstalled, Converter={StaticResource B2V}}"/>
                                 <StackPanel Orientation="Horizontal" Visibility="{Binding ShowInstalled}" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{StaticResource GreenBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="32-bit" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}" Margin="5,0,0,0"/>
+                                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource GreenBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="32-bit" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="5,0,0,0"/>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
@@ -129,10 +130,10 @@
         <StackPanel Grid.Row="0" Margin="34,4,34,10">
             <TextBlock Text="DEBLOAT" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
             <TextBlock Text="Apps" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock x:Name="Subtitle" FontSize="12.5" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+            <TextBlock x:Name="Subtitle" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
                        Text="Game launchers, runtimes and everyday apps, installed through Windows' own package manager."/>
-            <Border x:Name="WingetNotice" Visibility="Collapsed" Background="#1E1812" BorderBrush="#4A3716" BorderThickness="1" CornerRadius="10" Padding="14,9" Margin="0,10,0,0">
-                <TextBlock Foreground="{StaticResource AmberBrush}" FontSize="12.5" TextWrapping="Wrap"
+            <Border x:Name="WingetNotice" Visibility="Collapsed" Background="{DynamicResource Ink_FF1E1812}" BorderBrush="{DynamicResource Ink_FF4A3716}" BorderThickness="1" CornerRadius="10" Padding="14,9" Margin="0,10,0,0">
+                <TextBlock Foreground="{DynamicResource AmberBrush}" FontSize="12.5" TextWrapping="Wrap"
                            Text="Windows' package manager (winget) isn't available on this PC, so installing is switched off. Update “App Installer” in the Microsoft Store, then reopen TrapShack."/>
             </Border>
         </StackPanel>
@@ -141,18 +142,18 @@
         <Grid Grid.Row="1" Margin="34,0,34,10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Grid>
-                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="#141418"
-                         Foreground="{StaticResource TextBrush}" BorderBrush="#2A2A32" CaretBrush="{DynamicResource AccentHotBrush}"/>
-                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{StaticResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="SearchHint" Text="Search apps   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{StaticResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
+                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="{DynamicResource Ink_FF141418}"
+                         Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}" CaretBrush="{DynamicResource AccentHotBrush}"/>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SearchHint" Text="Search apps   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
             </Grid>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                <Border CornerRadius="10" Padding="10,3" Margin="0,0,6,0" Background="#1C1C22" BorderBrush="#33333C" BorderThickness="1">
-                    <TextBlock x:Name="StatInstalled" FontSize="11.5" Foreground="{StaticResource MutedBrush}"/>
+                <Border CornerRadius="10" Padding="10,3" Margin="0,0,6,0" VerticalAlignment="Center" Background="{DynamicResource Ink_FF1C1C22}" BorderBrush="{DynamicResource Ink_FF33333C}" BorderThickness="1">
+                    <TextBlock x:Name="StatInstalled" FontSize="11.5" Foreground="{DynamicResource MutedBrush}"/>
                 </Border>
-                <Border x:Name="RuntimeChip" Visibility="Collapsed" CornerRadius="10" Padding="10,3" Background="#2A2412" BorderBrush="{StaticResource AmberBrush}" BorderThickness="1"
+                <Border x:Name="RuntimeChip" Visibility="Collapsed" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="{DynamicResource Ink_FF2A2412}" BorderBrush="{DynamicResource AmberBrush}" BorderThickness="1"
                         Cursor="Hand" MouseLeftButtonUp="OnRuntimeChipClick">
-                    <TextBlock x:Name="RuntimeChipText" FontSize="11.5" Foreground="{StaticResource AmberBrush}"/>
+                    <TextBlock x:Name="RuntimeChipText" FontSize="11.5" Foreground="{DynamicResource AmberBrush}"/>
                 </Border>
             </StackPanel>
         </Grid>
@@ -177,8 +178,8 @@
                             <StackPanel Margin="0,0,0,6">
                                 <Grid Margin="2,8,0,9">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource FaintBrush}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Counter}" FontSize="11.5" Foreground="{StaticResource FaintBrush}" Margin="10,0,0,0"/>
+                                    <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource FaintBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Counter}" FontSize="11.5" Foreground="{DynamicResource FaintBrush}" Margin="10,0,0,0"/>
                                 </Grid>
                                 <ItemsControl ItemsSource="{Binding Items}">
                                     <ItemsControl.ItemsPanel>
@@ -189,18 +190,18 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock x:Name="NoMatch" Text="Nothing matches that." Foreground="{StaticResource MutedBrush}" Margin="2,10,0,0" Visibility="Collapsed"/>
+                <TextBlock x:Name="NoMatch" Text="Nothing matches that." Foreground="{DynamicResource MutedBrush}" Margin="2,10,0,0" Visibility="Collapsed"/>
             </StackPanel>
         </ScrollViewer>
 
         <!-- selection bar -->
-        <Border x:Name="PickBar" Grid.Row="4" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="#131317" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1"
+        <Border x:Name="PickBar" Grid.Row="4" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="{DynamicResource Ink_FF131317}" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1"
                 Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock x:Name="PickText" FontSize="13.5" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="PickSub" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="PickSub" FontSize="12" Foreground="{DynamicResource MutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Clear" Style="{StaticResource GhostButton}" Click="OnClearPicks" Margin="0,0,10,0"/>
                 <Button x:Name="InstallBtn" Grid.Column="2" Style="{StaticResource PrimaryButton}" Click="OnInstallClick" MinWidth="150"/>

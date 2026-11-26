@@ -68,6 +68,16 @@ public partial class AppsPage : UserControl
 
     // ------------------------------------------------------------------ scanning
 
+    /// <summary>Installed apps with no logo of their own get the program's real icon instead of a letter tile.</summary>
+    async Task LoadRealIconsAsync()
+    {
+        foreach (var a in _apps.Where(x => x.Installed && x.Art.NeedsRealIcon && x.Art.RealIcon == null).ToList())
+        {
+            var img = await Task.Run(() => ShellIcon.For(WingetService.IconPath(a.Def)));
+            if (img != null) a.Art.UseRealIcon(img);
+        }
+    }
+
     /// <summary>Looks at what is installed. Safe to call often; it never runs twice at once.</summary>
     public async Task ScanAsync(bool force = false)
     {
@@ -88,6 +98,7 @@ public partial class AppsPage : UserControl
         WingetNotice.Visibility = WingetService.Available ? Visibility.Collapsed : Visibility.Visible;
         Rebuild();
         ScanFinished?.Invoke();
+        _ = LoadRealIconsAsync();
     }
 
     // ------------------------------------------------------------------ selection

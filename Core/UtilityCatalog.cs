@@ -28,10 +28,21 @@ public static class UtilityCatalog
     {
         ("Repair Windows", "", "Fix damaged system files and Windows Update"),
         ("Network", "", "Fix slow, dropped or broken connections"),
+        ("DNS", "\uE774", "Pick a faster or more private DNS server"),
         ("Drives & storage", "", "Keep drives fast and healthy"),
         ("Gaming & audio", "", "Xbox, Game Pass and sound fixes"),
         ("Checks & reports", "", "See what your PC is doing"),
     };
+
+    // sets one DNS provider (IPv4 and IPv6) on every connected adapter, then clears the cache
+    static UtilTool Dns(string id, string title, string desc, string servers) => new(id, "DNS", title, desc, "\uE774", new[]
+    {
+        new UtilStep("Set DNS on connected adapters", PS, Ps(
+            "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { " +
+            "Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses (" + servers + "); " +
+            "Write-Output ($_.Name + ': ' + ((" + servers + ") -join ', ')) }")),
+        new UtilStep("Clear the DNS cache", "ipconfig.exe", "/flushdns"),
+    }, Confirm: "This sets " + title + " as the DNS server on every connected network adapter. \"Automatic\" puts Windows' default back.");
 
     public static readonly UtilTool[] Tools =
     {
@@ -111,6 +122,38 @@ public static class UtilityCatalog
         new("net-info", "Network", "Show network details",
             "Lists every adapter with its address, gateway and DNS servers.",
             "", new[] { new UtilStep("Network details", "ipconfig.exe", "/all") }),
+
+        // ------------------------------------------------------------------ DNS
+        Dns("dns-cloudflare", "Cloudflare (1.1.1.1)", "Usually the fastest. Doesn't sell or log your lookups long term.",
+            "'1.1.1.1','1.0.0.1','2606:4700:4700::1111','2606:4700:4700::1001'"),
+        Dns("dns-google", "Google (8.8.8.8)", "Fast and very reliable everywhere.",
+            "'8.8.8.8','8.8.4.4','2001:4860:4860::8888','2001:4860:4860::8844'"),
+        Dns("dns-quad9", "Quad9 (9.9.9.9)", "Blocks known malware and phishing sites. Run by a non-profit.",
+            "'9.9.9.9','149.112.112.112','2620:fe::fe','2620:fe::9'"),
+        new("dns-auto", "DNS", "Automatic (Windows default)",
+            "Goes back to the DNS servers your router or network hands out. This is how Windows comes.",
+            "\uE777", new[]
+            {
+                new UtilStep("Reset DNS on connected adapters", PS, Ps(
+                    "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { " +
+                    "Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses; " +
+                    "Write-Output ($_.Name + ': automatic DNS') }")),
+                new UtilStep("Clear the DNS cache", "ipconfig.exe", "/flushdns"),
+            }),
+        new("dns-speed", "DNS", "Test DNS speed",
+            "Times each DNS server answering the same lookups from this PC, so you can pick the fastest one for you.",
+            "\uEC4A", new[]
+            {
+                new UtilStep("Time each DNS server", PS, Ps(
+                    "$names = 'www.microsoft.com','www.youtube.com','www.discord.com','store.steampowered.com','www.reddit.com'; " +
+                    "$servers = [ordered]@{ 'Cloudflare' = '1.1.1.1'; 'Google' = '8.8.8.8'; 'Quad9' = '9.9.9.9' }; " +
+                    "$now = (Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } | Select-Object -First 1).ServerAddresses | Select-Object -First 1; " +
+                    "if ($now) { $servers['Current (' + $now + ')'] = $now }; " +
+                    "foreach ($k in $servers.Keys) { $ms = @(); foreach ($n in $names) { " +
+                    "try { $ms += (Measure-Command { Resolve-DnsName $n -Server $servers[$k] -DnsOnly -NoHostsFile -QuickTimeout -ErrorAction Stop | Out-Null }).TotalMilliseconds } catch { } }; " +
+                    "if ($ms.Count) { Write-Output ('{0,-28} {1,6:N0} ms average  ({2}/{3} answered)' -f $k, ($ms | Measure-Object -Average).Average, $ms.Count, $names.Count) } " +
+                    "else { Write-Output ('{0,-28} no answer' -f $k) } }")),
+            }),
 
         // ------------------------------------------------------------------ Drives
         new("optimize-all", "Drives & storage", "Optimise all drives",

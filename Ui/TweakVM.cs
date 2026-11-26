@@ -29,7 +29,8 @@ public sealed class TweakVM : INotifyPropertyChanged
     public bool IsSwitch => !T.OneShot;
     public string PageTitle => PageDefs.Get(PageKey).Title;
     public bool IsAdvanced => T.Risk == Risk.Advanced;
-    public string RowGlyph => IsAdvanced ? "\uE7BA" : T.OneShot ? "\uE768" : "\uE713";
+    string? _glyph;
+    public string RowGlyph => _glyph ??= TweakGlyph.For(T);
     public string Tip { get; }
 
     public string DetailText => T.Detail ?? T.Summary;

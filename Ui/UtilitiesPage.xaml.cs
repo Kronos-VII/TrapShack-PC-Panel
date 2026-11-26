@@ -43,8 +43,24 @@ public partial class UtilitiesPage : UserControl
     public UtilitiesPage()
     {
         InitializeComponent();
-        Term.StopRequested += () => _cts?.Cancel();
-        Term.Note("Pick a utility on the left. Its commands and their output appear here, live.", TermKind.Info);
+    }
+
+    // the pop-up terminal, made the first time a tool runs
+    TerminalWindow? _win;
+    TerminalView Term => _win!.Term;
+
+    void ShowTerminal(string title)
+    {
+        if (_win == null)
+        {
+            _win = new TerminalWindow { Owner = _host!.Win };
+            _win.Term.StopRequested += () => _cts?.Cancel();
+            _win.Closed += (_, _) => _win = null;
+        }
+        _win.Term.Clear();
+        _win.Term.Title = title;
+        if (!_win.IsVisible) _win.Show();
+        _win.Activate();
     }
 
     public void Init(IPageHost host, bool isLaptop)
@@ -64,9 +80,8 @@ public partial class UtilitiesPage : UserControl
     void OnOpenWinTool(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not WinTool t) return;
-        Term.Command("open " + t.Target + (t.Args != null ? " " + t.Args : ""));
-        if (CommandRunner.Open(t.Target, t.Args)) Term.Note(t.Name + " opened in its own window.", TermKind.Success);
-        else Term.Note("Windows couldn't open " + t.Name + " on this PC.", TermKind.Error);
+        if (!CommandRunner.Open(t.Target, t.Args) && _host != null)
+            Dialogs.Info(_host.Win, t.Name, "Windows couldn't open " + t.Name + " on this PC.");
     }
 
     async void OnRunTool(object sender, RoutedEventArgs e)
@@ -76,9 +91,8 @@ public partial class UtilitiesPage : UserControl
 
         if (vm.OpensWindow)
         {
-            Term.Command("open " + tool.Open + (tool.OpenArgs != null ? " " + tool.OpenArgs : ""));
-            if (CommandRunner.Open(tool.Open!, tool.OpenArgs)) Term.Note(tool.Title + " opened in its own window.", TermKind.Success);
-            else Term.Note("Windows couldn't open " + tool.Title + " on this PC.", TermKind.Error);
+            if (!CommandRunner.Open(tool.Open!, tool.OpenArgs))
+                Dialogs.Info(_host.Win, tool.Title, "Windows couldn't open " + tool.Title + " on this PC.");
             return;
         }
 
@@ -91,8 +105,8 @@ public partial class UtilitiesPage : UserControl
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
 
-        Term.Line("", false, TermKind.Output);
-        Term.Note(tool.Title.ToUpperInvariant(), TermKind.Info);
+        ShowTerminal(tool.Title);
+        _win!.Running = true;
         Term.SetState(TermState.Running, tool.Title);
         var problems = 0;
         var stopped = false;
@@ -127,6 +141,7 @@ public partial class UtilitiesPage : UserControl
         else { Term.Note($"{tool.Title} finished in {took}, with {problems} step{(problems == 1 ? "" : "s")} reporting a problem.", TermKind.Warning); Term.SetState(TermState.Failed, tool.Title + " needs a look"); }
 
         if (!stopped && tool.OpenAfter != null) CommandRunner.Open(UtilityCatalog.Expand(tool.OpenAfter));
+        if (_win != null) _win.Running = false;
         vm.IsRunning = false;
         foreach (var other in _all) other.Blocked = false;
         _running = false; _host.Busy = false;

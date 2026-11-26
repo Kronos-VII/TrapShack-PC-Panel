@@ -140,6 +140,46 @@ public static class WingetService
         return false;
     }
 
+    /// <summary>
+    /// Where the installed program's icon lives: its own exe from the catalog paths, or the icon its uninstall entry names.
+    /// Null when the app isn't found.
+    /// </summary>
+    public static string? IconPath(AppDef a)
+    {
+        foreach (var p in a.Paths)
+        {
+            try { var x = Environment.ExpandEnvironmentVariables(p); if (File.Exists(x) && x.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return x; } catch { }
+        }
+        if (string.IsNullOrEmpty(a.Reg)) return null;
+        var rx = new Regex("^" + Regex.Replace(Regex.Escape(a.Reg), @"\\\{(arch|version)}", ".*") + "$", RegexOptions.IgnoreCase);
+        foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var root = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+                    if (root == null) continue;
+                    foreach (var sub in root.GetSubKeyNames())
+                    {
+                        try
+                        {
+                            using var k = root.OpenSubKey(sub);
+                            if (k?.GetValue("DisplayName") is not string n || !rx.IsMatch(n.Trim())) continue;
+                            var icon = (k.GetValue("DisplayIcon") as string)?.Trim();
+                            if (string.IsNullOrEmpty(icon)) continue;
+                            icon = icon.Split(',')[0].Trim().Trim('"');   // "C:\app.exe",0  ->  C:\app.exe
+                            icon = Environment.ExpandEnvironmentVariables(icon);
+                            if (File.Exists(icon)) return icon;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+        return null;
+    }
+
     static List<string> ReadUninstallNames()
     {
         var list = new List<string>();

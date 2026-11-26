@@ -11,6 +11,19 @@ public static partial class Catalog
 
     static IEnumerable<Tweak> MoreCleanup()
     {
+        yield return Once(Mk("clean.oosu", Category.Debloat, "Privacy tool",
+            "Open O&O ShutUp10++",
+            "Downloads the free privacy tool from its publisher and opens it so you can review its settings.",
+            Sometimes,
+            L(new CustomAction(
+                "Make a restore point and policy backup, download O&O ShutUp10++, check its signature and open it",
+                isApplied: () => false,
+                apply: () => PrivacyTool.Run())),
+            detail: "Before opening it TrapShack makes a restore point and saves a copy of your policy registry keys under ProgramData\\TrapShack\\backups. " +
+                    "The download comes from the publisher's own server and only runs if it carries a valid O&O Software signature. " +
+                    "If the download is blocked, the last verified copy is used; if there is none, the official page opens instead. " +
+                    "Inside the tool, its own Actions menu can undo its changes."));
+
         yield return Mk("clean.lockscreen", Category.Customize, Appearance,
             "Skip the lock screen",
             "Goes straight to the sign-in screen without the lock screen picture.",
@@ -55,6 +68,16 @@ public static partial class Catalog
                 Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 "LogiDownloadAssistant"), "logi_download_assistant")),
             detail: "Creates the LogiDownloadAssistant folder and denies write access so it cannot reinstall. Restore removes the rule.",
+            risk: Risk.Advanced);
+
+        yield return Mk("clean.adobe-block", Category.Debloat, Deep,
+            "Block Adobe background connections",
+            "Adds the community Adobe block list to the hosts file to cut Adobe's background pop-ups and tracking.",
+            Sometimes,
+            L(AdobeHostsBlock()),
+            detail: "Downloads the Ruddernation-Designs Adobe URL block list when you switch it on and adds it to the hosts file " +
+                    "between TrapShack markers. Only plain block lines are kept. Restore removes exactly that block. " +
+                    "Adobe apps may then show sign-in or update problems: switch it off if they do.",
             risk: Risk.Advanced);
 
         yield return Mk("clean.reserved-storage", Category.Debloat, Deep,
@@ -112,6 +135,61 @@ public static partial class Catalog
     {
         var r = Shell.PowerShell(script);
         if (!r.Ok) throw new InvalidOperationException((r.Output + r.Error).Trim());
+    }
+
+    // ---------------------------------------------------------------------------------------------- hosts file block lists
+    const string AdobeListUrl = "https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts";
+    const string AdobeStart = "# >>> TrapShack Adobe block list (switch off in TrapShack to remove)";
+    const string AdobeEnd = "# <<< TrapShack Adobe block list";
+
+    static string HostsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "etc", "hosts");
+
+    static CustomAction AdobeHostsBlock() => new(
+        "Add the Adobe block list to the hosts file between markers (restore removes the block)",
+        isApplied: () => File.Exists(HostsPath) && File.ReadAllText(HostsPath).Contains(AdobeStart),
+        apply: () =>
+        {
+            string list;
+            using (var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) })
+            {
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("TrapShack");
+                list = http.GetStringAsync(AdobeListUrl).GetAwaiter().GetResult();
+            }
+            // keep only plain "0.0.0.0 host" / "127.0.0.1 host" lines, nothing else from the download
+            var rx = new System.Text.RegularExpressions.Regex(@"^(0\.0\.0\.0|127\.0\.0\.1)\s+[A-Za-z0-9][A-Za-z0-9.\-]*$");
+            var lines = list.Split('\n').Select(l => l.Trim()).Where(l => rx.IsMatch(l))
+                            .Select(l => System.Text.RegularExpressions.Regex.Replace(l, @"\s+", " ")).Distinct().ToList();
+            if (lines.Count < 5) throw new InvalidOperationException("The Adobe block list couldn't be downloaded. Check the internet connection and try again.");
+            var text = RemoveBlock(File.Exists(HostsPath) ? File.ReadAllText(HostsPath) : "", AdobeStart, AdobeEnd).TrimEnd();
+            text += "\r\n\r\n" + AdobeStart + "\r\n" + string.Join("\r\n", lines) + "\r\n" + AdobeEnd + "\r\n";
+            WriteHosts(text);
+            Log.Info($"Added {lines.Count} Adobe block entries to the hosts file.");
+        },
+        revert: _ =>
+        {
+            if (!File.Exists(HostsPath)) return;
+            var old = File.ReadAllText(HostsPath);
+            var text = RemoveBlock(old, AdobeStart, AdobeEnd);
+            if (text != old) WriteHosts(text.TrimEnd() + "\r\n");
+        });
+
+    static string RemoveBlock(string text, string start, string end)
+    {
+        var i = text.IndexOf(start, StringComparison.Ordinal);
+        if (i < 0) return text;
+        var j = text.IndexOf(end, i, StringComparison.Ordinal);
+        j = j < 0 ? text.Length : j + end.Length;
+        return text.Remove(i, j - i);
+    }
+
+    static void WriteHosts(string text)
+    {
+        // write next to it first, then swap in, so a failed write never leaves a half-written hosts file
+        var tmp = HostsPath + ".trapshack.tmp";
+        File.WriteAllText(tmp, text, new System.Text.UTF8Encoding(false));
+        File.Copy(tmp, HostsPath, true);
+        File.Delete(tmp);
+        Shell.Run("ipconfig.exe", "/flushdns", 15_000);
     }
 
     static void Icacls(string args)

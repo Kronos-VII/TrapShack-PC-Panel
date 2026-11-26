@@ -22,6 +22,8 @@ public sealed class Settings
 
     /// <summary>The soft glow, rise-in and drifting haze. On by default.</summary>
     public bool LiveEffects { get; set; } = true;
+    /// <summary>Soft grey light theme instead of the dark one.</summary>
+    public bool LightTheme { get; set; }
     /// <summary>Show the console under the progress panel (the commands TrapShack runs, live).</summary>
     public bool ShowConsole { get; set; }
 

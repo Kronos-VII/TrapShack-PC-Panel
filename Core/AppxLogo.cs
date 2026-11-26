@@ -46,8 +46,18 @@ public static class AppxLogo
         var stem = Path.GetFileNameWithoutExtension(named);
         var ext = Path.GetExtension(named);
         var files = Directory.GetFiles(dir, stem + "*" + ext)
-            .Where(f => !f.Contains("contrast-", StringComparison.OrdinalIgnoreCase)
-                     && !f.Contains("lightunplated", StringComparison.OrdinalIgnoreCase))
+            .Where(f =>
+            {
+                var n = Path.GetFileName(f);
+                // only variants of this exact asset ("AppList.scale-200.png"), not a different one ("AppListBadge.png")
+                if (!n.StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase) && !n.Equals(stem + ext, StringComparison.OrdinalIgnoreCase)) return false;
+                // skip high-contrast, light-theme and the old Windows 10X "colorful" icons: they look wrong on a dark tile
+                return !n.Contains("contrast-", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("lightunplated", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("theme-light", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("colorful", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("devicefamily-", StringComparison.OrdinalIgnoreCase);
+            })
             .ToList();
         if (files.Count == 0) return File.Exists(named) ? named : null;
 

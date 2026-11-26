@@ -73,6 +73,23 @@ public sealed class TweakEngine
         finally { State.Remove(PendingKey); }
     }
 
+    /// <summary>
+    /// Puts back only the parts of a setting that were actually changed (those with a saved original), and leaves
+    /// the rest alone. Used after an apply was interrupted part-way.
+    /// </summary>
+    public void RevertSaved(Tweak t)
+    {
+        for (var i = t.Actions.Count - 1; i >= 0; i--)
+        {
+            var key = Key(t, i);
+            if (!State.Has(key)) continue;
+            var saved = State.Get(key);
+            try { t.Actions[i].Revert(string.IsNullOrEmpty(saved) ? null : saved); }
+            catch (Exception ex) { Log.Error($"Putting back {t.Id}/{i} failed: {ex.Message}"); }
+            State.Remove(key);
+        }
+    }
+
     /// <summary>State key holding the id of a setting that was being applied when the app last stopped.</summary>
     public const string PendingKey = "app.pending-apply";
 

@@ -1,0 +1,18 @@
+<Window x:Class="TrapShack.Ui.TerminalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:TrapShack.Ui"
+        WindowStyle="None" AllowsTransparency="True" ResizeMode="CanResizeWithGrip" ShowInTaskbar="False"
+        Width="780" Height="480" MinWidth="520" MinHeight="300"
+        WindowStartupLocation="CenterOwner" Background="Transparent"
+        FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="#F4F4F6">
+    <!-- a clean pop-up terminal: only opens while a tool runs, closes when you're done reading -->
+    <Grid Margin="18">
+        <Border CornerRadius="14" Background="#09090C">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.6" Color="Black"/>
+            </Border.Effect>
+        </Border>
+        <ui:TerminalView x:Name="Term"/>
+    </Grid>
+</Window>

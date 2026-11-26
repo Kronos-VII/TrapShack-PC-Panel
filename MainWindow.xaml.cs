@@ -37,11 +37,14 @@ public partial class MainWindow : Window, IPageHost
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => WorkArea.Hook(this);   // maximised = the screen minus the taskbar
         Closing += OnWindowClosing;
         BuildNav();
         _effectsReady = false;
         Fx.On = _settings.LiveEffects;
         EffectsCheck.IsChecked = _settings.LiveEffects;
+        LightCheck.IsChecked = _settings.LightTheme;
+        if (_settings.LightTheme) ThemeMode.Apply(true);   // after the window is built, so the terminal keeps its dark look
         _effectsReady = true;
         Fx.Haze(Haze, _settings.LiveEffects);
         QuickPop.Closed += (_, _) => _quickClosed = DateTime.Now;
@@ -51,6 +54,7 @@ public partial class MainWindow : Window, IPageHost
         AppsPanel.Init(this);
         DebloatAppsPanel.Init(this);
         CleanerPanel.Init(this);
+        RestorePanel.Init(this);
         Apply.SetConsole(_settings.ShowConsole);
         Apply.ConsoleToggled += on => { _settings.ShowConsole = on; _settings.Save(); };
         AppsPanel.ScanFinished += () => { if (HomePanel.Visibility == Visibility.Visible) RefreshHome(); };
@@ -133,9 +137,10 @@ public partial class MainWindow : Window, IPageHost
                 $"TrapShack was closed while it was applying \u201c{vm.T.Title}\u201d, so it may be only partly applied.\n\n" +
                 "Put it back the way it was? (You can apply it again afterwards.)", "Put it back", "Leave it"))
             return;
-        var err = await Task.Run(() => { try { return _engine.Revert(vm.T); } catch (Exception ex) { return ex.Message; } });
+        var err = await Task.Run(() => { try { _engine.RevertSaved(vm.T); return null; } catch (Exception ex) { return ex.Message; } });
         vm.SetOn(await Task.Run(() => _engine.IsApplied(vm.T)));
         if (err != null) Log.Error($"Undo of interrupted {id}: {err}");
+        else Log.Info($"Interrupted {id} put back");
         RefreshViews();
     }
 
@@ -244,6 +249,8 @@ public partial class MainWindow : Window, IPageHost
         Add("apps", Page("apps").Title, Page("apps").Glyph, false);
         Add("cleaner", "PC Cleaner", "\uEA99", false);
         Add("utilities", "Utilities", "\uE90F", false);
+        Add("startup", "Startup apps", "\uE7E8", false);
+        Add("restore", "Restore points", "\uE81C", false);
     }
 
     void OnNavChecked(object sender, RoutedEventArgs e)
@@ -268,7 +275,7 @@ public partial class MainWindow : Window, IPageHost
     /// <summary>Shows one panel and hides the others.</summary>
     void ShowPanel(UIElement panel)
     {
-        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel, UtilitiesPanel })
+        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel, UtilitiesPanel, StartupPanel, RestorePanel })
             p.Visibility = ReferenceEquals(p, panel) ? Visibility.Visible : Visibility.Collapsed;
         panel.BeginAnimation(OpacityProperty, null);   // pages switch instantly; the cards inside do a short rise
     }
@@ -288,6 +295,8 @@ public partial class MainWindow : Window, IPageHost
             case "winapps": ShowPanel(DebloatAppsPanel); _ = DebloatAppsPanel.LoadAsync(); break;
             case "cleaner": ShowPanel(CleanerPanel); _ = CleanerPanel.LoadAsync(); break;
             case "utilities": ShowPanel(UtilitiesPanel); break;
+            case "startup": ShowPanel(StartupPanel); _ = StartupPanel.LoadAsync(); break;
+            case "restore": ShowPanel(RestorePanel); _ = RestorePanel.LoadAsync(); break;
             case "search": ShowPanel(SearchPanel); SearchAllBox.Focus(); RunGlobalSearch(); break;
             case "hub":
                 _hub = true;
@@ -461,6 +470,7 @@ public partial class MainWindow : Window, IPageHost
         if (AppsPanel.Visibility == Visibility.Visible) { AppsPanel.FocusSearch(); e.Handled = true; return; }
         if (DebloatAppsPanel.Visibility == Visibility.Visible) { DebloatAppsPanel.FocusSearch(); e.Handled = true; return; }
         if (CleanerPanel.Visibility == Visibility.Visible) { CleanerPanel.FocusSearch(); e.Handled = true; return; }
+        if (StartupPanel.Visibility == Visibility.Visible) { StartupPanel.FocusSearch(); e.Handled = true; return; }
         TextBox? box = TweakPanel.Visibility == Visibility.Visible ? SearchBox
                      : SearchPanel.Visibility == Visibility.Visible ? SearchAllBox : null;
         if (box == null) return;
@@ -493,9 +503,15 @@ public partial class MainWindow : Window, IPageHost
                 $"Recommended {st.RecDone}/{st.RecTotal}", st.RecTotal > 0,
                 $"Default {st.Default}/{st.Total}",
                 $"Custom {st.Custom}/{st.Total}", st.Custom > 0,
-                st.RecTotal == 0 ? 0 : (double)st.RecDone / st.RecTotal));
+                st.RecTotal == 0 ? 0 : (double)st.RecDone / st.RecTotal) { FullGroups = string.Join(", ", groups) });
         }
-        HubList.ItemsSource = rows;
+        // the first area (Gaming & Performance) is the big card on the left; the others fill a 3 x 2 grid beside it
+        var featured = rows.Count >= 4 ? rows[0] : null;
+        HubFeatured.Content = featured;
+        HubFeatured.Visibility = featured != null ? Visibility.Visible : Visibility.Collapsed;
+        HubFeaturedCol.Width = featured != null ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        HubGapCol.Width = featured != null ? new GridLength(12) : new GridLength(0);
+        HubList.ItemsSource = featured != null ? rows.Skip(1).ToList() : rows;
         var all = _vms.Where(v => PageDefs.All.Any(p => p.Section == _hubSection && p.Key == v.PageKey)).ToList();
         var s = Stats(all);
         HubSummary.Text = s.RecTotal == 0 ? "" : $"{s.RecDone} of {s.RecTotal} recommended settings applied across these pages";
@@ -522,7 +538,7 @@ public partial class MainWindow : Window, IPageHost
         {
             IEnumerable<TweakVM> set = key switch
             {
-                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" or "utilities" => Enumerable.Empty<TweakVM>(),
+                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" or "utilities" or "startup" or "restore" => Enumerable.Empty<TweakVM>(),
                 "hub" => _vms.Where(v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations),
                 _ => _vms.Where(v => v.PageKey == key),
             };
@@ -580,14 +596,12 @@ public partial class MainWindow : Window, IPageHost
         if (!Dialogs.Confirm(this, vm.T.Title, vm.T.Confirm ?? "Run this one-time action now?", "Run now")) return;
         HideRestartBar();
         _busy = true;
-        Apply.Begin("Running", "Running: " + vm.T.Title, new List<(string, string)> { (vm.T.Title, vm.T.Summary) }, false);
-        Apply.StartStep(0);
+        vm.SetBusy(true);
+        // single actions run quietly: the card's button is greyed out while it works, and only a problem pops up
         var error = await Task.Run(() => TryRun(vm.T));
-        Apply.EndStep(0, error == null ? StepResult.Done : StepResult.Failed, error == null ? "Done" : null);
-        if (error == null) Apply.Finish("Complete", vm.T.Title, "Finished.", 1, 0, 0, autoClose: true);
-        else Apply.Finish("Didn't finish", "That didn't finish", error, 0, 0, 1, autoClose: false);
-        await Apply.WaitClosedAsync();
+        vm.SetBusy(false);
         _busy = false;
+        if (error != null) Dialogs.Info(this, "That didn't finish", vm.T.Title + ":\n\n" + error);
         SetStatus(error == null ? $"{vm.T.Title}: done" : $"{vm.T.Title}: failed");
     }
 
@@ -691,21 +705,8 @@ public partial class MainWindow : Window, IPageHost
         _busy = true;
         vm.SetBusy(true);
 
-        var acts = vm.T.Actions.Where(a => a.IsApplicable()).Select(a => a.Describe()).ToList();
-        var steps = new List<(string, string)>();
-        for (var i = 0; i < acts.Count; i++)
-            steps.Add((acts.Count == 1 ? vm.T.Title : $"Change {i + 1} of {acts.Count}", acts[i]));
-        steps.Add(("Check the result in Windows", "Reading the setting back"));
-        Apply.Begin(wantOn ? "Applying" : "Restoring", (wantOn ? "Applying: " : "Restoring: ") + vm.T.Title, steps, false);
-
-        var prev = -1;
-        Action<int> onStep = i => Dispatcher.BeginInvoke(() =>
-        {
-            if (prev >= 0) Apply.EndStep(prev, StepResult.Done, "Written");
-            Apply.StartStep(i);
-            prev = i;
-        });
-
+        // one switch runs quietly: the switch is greyed out while it works, and only a problem pops up
+        Action<int>? onStep = null;
         string? error = null;
         await Task.Run(() =>
         {
@@ -720,36 +721,25 @@ public partial class MainWindow : Window, IPageHost
                 Log.Error($"{(wantOn ? "Apply" : "Revert")} {vm.T.Id}: {ex}");
             }
         });
-        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);   // let queued step updates land first
-
-        var verifyIndex = acts.Count;
-        if (prev >= 0) Apply.EndStep(prev, error == null ? StepResult.Done : StepResult.Failed, error == null ? "Written" : null);
-
+        // read it back from Windows to be sure the change stuck
         var verified = false;
         if (error == null)
         {
-            Apply.StartStep(verifyIndex, "Checking that Windows kept the change");
             var isOn = await Task.Run(() => _engine.IsApplied(vm.T));
             vm.SetOn(isOn);
             verified = isOn == wantOn;
-            Apply.EndStep(verifyIndex, verified ? StepResult.Done : StepResult.Warn);
         }
         else vm.SetOn(await Task.Run(() => _engine.IsApplied(vm.T)));
 
         var needsRestart = wantOn && verified && (vm.T.RestartRequired || vm.T.SignOutRequired);
-        if (error != null)
-            Apply.Finish("Rolled back", "Nothing was changed", "TrapShack put back anything it had already changed. " + error, 0, 0, 1, autoClose: false);
-        else if (!verified)
-            Apply.Finish("Check this setting", vm.T.Title,
-                "Windows accepted the change but the setting still reads as it did. A policy, another program or Windows itself may be overriding it.", 0, 0, 1, autoClose: false);
-        else
-            Apply.Finish("Complete", (wantOn ? "Applied: " : "Restored: ") + vm.T.Title,
-                needsRestart ? "Read back from Windows and confirmed. A restart is needed to finish this." : "Read back from Windows and confirmed.",
-                1, needsRestart ? 1 : 0, 0, autoClose: true);
-
-        await Apply.WaitClosedAsync();
         vm.SetBusy(false);
         _busy = false;
+
+        if (error != null)
+            Dialogs.Info(this, "Nothing was changed", vm.T.Title + ":\n\nTrapShack put back anything it had already changed.\n\n" + error);
+        else if (!verified)
+            Dialogs.Info(this, "Check this setting", vm.T.Title +
+                ":\n\nWindows accepted the change but the setting still reads as it did. A policy, another program or Windows itself may be overriding it.");
 
         if (error != null) SetStatus("Something went wrong. Details are in the log.");
         else
@@ -837,11 +827,14 @@ public partial class MainWindow : Window, IPageHost
     void OnUndoPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = UndoAsync(CurrentScope(), toDefaults: true); }
     void OnUndoAll(object sender, RoutedEventArgs e) => _ = UndoAsync(null, toDefaults: false);
 
-    async Task ApplyRecommendedAsync(Func<TweakVM, bool>? scope)
+    async Task ApplyRecommendedAsync(Func<TweakVM, bool>? scope, List<TweakVM>? profile = null)
     {
         if (_busy) return;
 
-        var todo = _vms.Where(v => (scope == null || scope(v)) && v.V.Fit == Fit.Recommended && !v.IsOn).ToList();
+        // a loaded profile applies its own list (only settings that are off and allowed on this PC)
+        var todo = profile != null
+            ? profile.Where(v => !v.IsOn && v.CanToggle && !v.T.OneShot).ToList()
+            : _vms.Where(v => (scope == null || scope(v)) && v.V.Fit == Fit.Recommended && !v.IsOn).ToList();
         if (todo.Count == 0)
         {
             Dialogs.Info(this, "Nothing to apply", "Every recommended setting for this PC is already applied.");
@@ -851,9 +844,11 @@ public partial class MainWindow : Window, IPageHost
         var lines = string.Join("\n", todo.Take(14).Select(v => "•  " + v.T.Title));
         if (todo.Count > 14) lines += $"\n…and {todo.Count - 14} more";
 
-        if (!Dialogs.Confirm(this, "Apply recommended settings",
-                $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} chosen for this PC " +
-                $"({_sys.OsName}, {_sys.CpuBrand} CPU, {GpuBrand}):\n\n{lines}\n\n" +
+        if (!Dialogs.Confirm(this, profile != null ? "Apply this profile" : "Apply recommended settings",
+                (profile != null
+                    ? $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} from the profile:\n\n{lines}\n\n"
+                    : $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} chosen for this PC " +
+                      $"({_sys.OsName}, {_sys.CpuBrand} CPU, {GpuBrand}):\n\n{lines}\n\n") +
                 "A restore point is created first, and every change can be switched off again.", "Apply"))
             return;
 
@@ -1068,7 +1063,7 @@ public partial class MainWindow : Window, IPageHost
 
     void OnClose(object sender, RoutedEventArgs e)
     {
-        if (_busy && !Dialogs.Confirm(this, "TrapShack is still working",
+        if ((_busy || CleanerPanel.Busy) && !Dialogs.Confirm(this, "TrapShack is still working",
                 "Closing now could interrupt a change in progress. Close anyway?", "Close anyway"))
             return;
         _closeConfirmed = true;
@@ -1215,7 +1210,10 @@ public partial class MainWindow : Window, IPageHost
         var w = Math.Max(1, ActualWidth - (WindowState == WindowState.Maximized ? 14 : 0));
         var h = Math.Max(1, ActualHeight - (WindowState == WindowState.Maximized ? 14 : 0));
         var raw = Math.Min(w / DesignW, h / DesignH);
-        var scale = Math.Clamp(Math.Round(raw * 40) / 40, 0.7, 1.6);   // steps of 0.025 keep text sharp
+        // shrink in small windows so pages fit; never blow things up on a normal screen (a maximised 1080p window
+        // stays at 100% and simply shows more cards). Only really big screens (1440p and up) grow a little.
+        if (raw > 1.0) raw = raw < 1.5 ? 1.0 : Math.Min(1.0 + (raw - 1.5) * 0.4, 1.25);
+        var scale = Math.Clamp(Math.Round(raw * 40) / 40, 0.75, 1.25);   // steps of 0.025 keep text sharp
         if (Math.Abs(UiScale.ScaleX - scale) < 0.001) return;
         UiScale.ScaleX = scale; UiScale.ScaleY = scale;
         Application.Current.Resources["UiScaleFactor"] = scale;
@@ -1230,6 +1228,65 @@ public partial class MainWindow : Window, IPageHost
         _settings.LiveEffects = on; _settings.Save();
         Fx.On = on;
         Fx.Haze(Haze, on);
+    }
+
+    // =============================================================================================
+    // Profiles: save which settings are on to a file, and load that file on another PC
+
+    void OnExportProfile(object sender, RoutedEventArgs e)
+    {
+        var on = _vms.Where(v => v.IsOn && !v.T.OneShot).Select(v => v.T.Id).OrderBy(x => x).ToList();
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Save profile", Filter = "TrapShack profile (*.tsprofile)|*.tsprofile",
+            FileName = $"TrapShack profile {DateTime.Now:yyyy-MM-dd}.tsprofile",
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(new ProfileFile
+            {
+                App = "TrapShack Tweak Utility", Made = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), PcName = Environment.MachineName, On = on,
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            System.IO.File.WriteAllText(dlg.FileName, json);
+            ProfileStatus.Text = $"Saved {on.Count} settings to {System.IO.Path.GetFileName(dlg.FileName)}.";
+        }
+        catch (Exception ex) { Dialogs.Info(this, "Couldn't save the profile", ex.Message); }
+    }
+
+    async void OnImportProfile(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Load profile", Filter = "TrapShack profile (*.tsprofile)|*.tsprofile|All files|*.*" };
+        if (dlg.ShowDialog(this) != true) return;
+        ProfileFile? p;
+        try { p = System.Text.Json.JsonSerializer.Deserialize<ProfileFile>(System.IO.File.ReadAllText(dlg.FileName)); }
+        catch (Exception ex) { Dialogs.Info(this, "That file isn't a profile", ex.Message); return; }
+        if (p?.On == null || p.On.Count == 0) { Dialogs.Info(this, "Empty profile", "This profile has no settings in it."); return; }
+        var ids = p.On.ToHashSet();
+        var list = _vms.Where(v => ids.Contains(v.T.Id)).ToList();
+        var skipped = list.Count(v => !v.CanToggle);
+        var unknown = ids.Count - list.Count;
+        ProfileStatus.Text = $"Profile from {p.PcName} ({p.Made}): {list.Count(v => v.IsOn)} already on" +
+                             (skipped > 0 ? $", {skipped} not for this PC" : "") + (unknown > 0 ? $", {unknown} from another version" : "") + ".";
+        await ApplyRecommendedAsync(null, list);
+    }
+
+    public sealed class ProfileFile
+    {
+        public string App { get; set; } = "";
+        public string Made { get; set; } = "";
+        public string PcName { get; set; } = "";
+        public List<string> On { get; set; } = new();
+    }
+
+    void OnLightToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_effectsReady) return;
+        var on = LightCheck.IsChecked == true;
+        _settings.LightTheme = on; _settings.Save();
+        ThemeMode.Apply(on);
+        BuildSwatches();
     }
 
     void OnStateChanged(object? sender, EventArgs e)
@@ -1367,13 +1424,14 @@ public partial class MainWindow : Window, IPageHost
 
     void ShowUpdateSetting()
     {
-        // the official GitHub mark, if Assets\Brand\github.png was added to the project
+        // the GitHub mark, drawn in the theme's text colour
         try
         {
             var uri = new Uri("pack://application:,,,/Assets/Brand/github.png");
             if (Application.GetResourceStream(uri) != null)
             {
-                GitHubMark.Source = new System.Windows.Media.Imaging.BitmapImage(uri);
+                GitHubMark.OpacityMask = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(uri)) { Stretch = Stretch.Uniform };
+                GitHubMark.Visibility = Visibility.Visible;
                 GitHubGlyph.Visibility = Visibility.Collapsed;
             }
         }
@@ -1459,7 +1517,7 @@ public partial class MainWindow : Window, IPageHost
             {
                 Width = 28, Height = 28, Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = name, Tag = hex,
                 Background = new SolidColorBrush(c), BorderThickness = new Thickness(selected ? 3 : 1),
-                BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x3B)),
+                BorderBrush = (Brush)FindResource(selected ? "TextBrush" : "BorderBrushSoft"),
                 Template = SwatchTemplate(),
             };
             b.Click += (_, _) => SetAccent(hex);

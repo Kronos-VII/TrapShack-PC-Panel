@@ -10,42 +10,42 @@
             <Setter Property="CornerRadius" Value="7"/>
             <Setter Property="Padding" Value="9,3"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Background" Value="#1C1C22"/>
-            <Setter Property="BorderBrush" Value="#2E2E37"/>
+            <Setter Property="Background" Value="{DynamicResource Ink_FF1C1C22}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Ink_FF2E2E37}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding TagKind}" Value="core">
-                    <Setter Property="Background" Value="#241E10"/><Setter Property="BorderBrush" Value="#4A3716"/>
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF241E10}"/><Setter Property="BorderBrush" Value="{DynamicResource Ink_FF4A3716}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="perm">
-                    <Setter Property="Background" Value="#2A1317"/><Setter Property="BorderBrush" Value="#5A1D27"/>
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF2A1317}"/><Setter Property="BorderBrush" Value="#5A1D27"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="done">
-                    <Setter Property="Background" Value="#12221A"/><Setter Property="BorderBrush" Value="#1F4A33"/>
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF12221A}"/><Setter Property="BorderBrush" Value="{DynamicResource Ink_FF1F4A33}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="TagText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding TagKind}" Value="core"><Setter Property="Foreground" Value="{StaticResource AmberBrush}"/></DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="core"><Setter Property="Foreground" Value="{DynamicResource AmberBrush}"/></DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="perm"><Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/></DataTrigger>
-                <DataTrigger Binding="{Binding TagKind}" Value="done"><Setter Property="Foreground" Value="{StaticResource GreenBrush}"/></DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="done"><Setter Property="Foreground" Value="{DynamicResource GreenBrush}"/></DataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="AppTile" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSoft}"/>
+            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushSoft}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="12,10,10,10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource CardHoverBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBorderBrush}"/>
                 </Trigger>
                 <DataTrigger Binding="{Binding Selected}" Value="True">
@@ -82,13 +82,13 @@
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                    MaxHeight="30" LineHeight="15" Margin="0,2,0,0"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right">
                         <CheckBox Style="{StaticResource TsCheck}" IsChecked="{Binding Selected, Mode=TwoWay}" IsEnabled="{Binding CanSelect}"
                                   Visibility="{Binding Locked, Converter={StaticResource InvB2V}}" HorizontalAlignment="Right"/>
-                        <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{StaticResource FaintBrush}"
+                        <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource FaintBrush}"
                                    Visibility="{Binding Locked, Converter={StaticResource B2V}}" HorizontalAlignment="Right"/>
                         <Border Style="{StaticResource TagBox}" Margin="0,6,0,0" Padding="7,2" HorizontalAlignment="Right"
                                 Visibility="{Binding ShowTag, Converter={StaticResource B2V}}">
@@ -108,21 +108,21 @@
         <StackPanel Grid.Row="0" Margin="34,4,34,10">
             <TextBlock Text="DEBLOAT" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
             <TextBlock Text="Debloat apps" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="12.5" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+            <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
                        Text="The Windows apps found on this PC. Tick the ones you don't use. Locked apps are needed by Windows."/>
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="34,0,34,10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Grid>
-                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="#141418"
-                         Foreground="{StaticResource TextBrush}" BorderBrush="#2A2A32" CaretBrush="{DynamicResource AccentHotBrush}"/>
-                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{StaticResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="SearchHint" Text="Search Windows apps   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{StaticResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
+                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="{DynamicResource Ink_FF141418}"
+                         Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}" CaretBrush="{DynamicResource AccentHotBrush}"/>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SearchHint" Text="Search Windows apps   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
             </Grid>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                <Border CornerRadius="10" Padding="10,3" Margin="0,0,10,0" Background="#1C1C22" BorderBrush="#33333C" BorderThickness="1">
-                    <TextBlock x:Name="StatFound" FontSize="11.5" Foreground="{StaticResource MutedBrush}"/>
+                <Border CornerRadius="10" Padding="10,3" Margin="0,0,10,0" VerticalAlignment="Center" Background="{DynamicResource Ink_FF1C1C22}" BorderBrush="{DynamicResource Ink_FF33333C}" BorderThickness="1">
+                    <TextBlock x:Name="StatFound" FontSize="11.5" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/>
                 </Border>
                 <Button Content="Pick the safe ones" Style="{StaticResource GhostButton}" Click="OnPickSafe" Margin="0,0,8,0"
                         ToolTip="Picks the apps that are safe for everyone to remove. Optional and core apps are left alone."/>
@@ -132,8 +132,8 @@
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="34,0,34,16">
-                <TextBlock x:Name="Loading" Text="Looking at what's installed…" Foreground="{StaticResource MutedBrush}" Margin="2,6,0,0"/>
-                <TextBlock x:Name="Empty" Visibility="Collapsed" Foreground="{StaticResource MutedBrush}" Margin="2,6,0,0" TextWrapping="Wrap"/>
+                <TextBlock x:Name="Loading" Text="Looking at what's installed…" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0"/>
+                <TextBlock x:Name="Empty" Visibility="Collapsed" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0" TextWrapping="Wrap"/>
                 <ItemsControl x:Name="Tiles">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="190" Gap="10" RowHeight="76"/></ItemsPanelTemplate>
@@ -142,12 +142,12 @@
             </StackPanel>
         </ScrollViewer>
 
-        <Border x:Name="PickBar" Grid.Row="3" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="#131317" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" Visibility="Collapsed">
+        <Border x:Name="PickBar" Grid.Row="3" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="{DynamicResource Ink_FF131317}" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock x:Name="PickText" FontSize="13.5" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="PickSub" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="PickSub" FontSize="12" Foreground="{DynamicResource MutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Clear" Style="{StaticResource GhostButton}" Click="OnClear" Margin="0,0,10,0"/>
                 <Button x:Name="RemoveBtn" Grid.Column="2" Style="{StaticResource PrimaryButton}" Click="OnRemoveClick" MinWidth="150"/>

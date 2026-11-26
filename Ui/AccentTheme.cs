@@ -68,18 +68,27 @@ public static class AccentTheme
 
     static Color Lighten(Color c, double amount) => Mix(Colors.White, c, amount);
 
+    /// <summary>The accent last applied, so switching between the dark and light themes can redo the tints.</summary>
+    public static Color Current { get; private set; } = Color.FromRgb(0xE5, 0x21, 0x3B);
+
     public static void Apply(Color c)
     {
+        Current = c;
         var res = Application.Current.Resources;
-        var hot = Lighten(c, 0.28);
-        var page = Color.FromRgb(0x0B, 0x0B, 0x0E);
-        var side = Color.FromRgb(0x08, 0x08, 0x0A);
-        var card = Color.FromRgb(0x14, 0x14, 0x18);
+        var light = ThemeMode.IsLight;
+        // on the light theme, accent text is a shade darker so it stays readable on grey
+        var hot = light ? Mix(c, Colors.Black, 0.82) : Lighten(c, 0.28);
+        var page = light ? ThemeMode.Map(Color.FromRgb(0x0B, 0x0B, 0x0E)) : Color.FromRgb(0x0B, 0x0B, 0x0E);
+        var side = light ? ThemeMode.Map(Color.FromRgb(0x08, 0x08, 0x0A)) : Color.FromRgb(0x08, 0x08, 0x0A);
+        var card = light ? ThemeMode.Map(Color.FromRgb(0x14, 0x14, 0x18)) : Color.FromRgb(0x14, 0x14, 0x18);
 
         Put(res, "AccentColor", c);
         Put(res, "AccentHotColor", hot);
         Brush(res, "AccentBrush", c);
         Brush(res, "AccentHotBrush", hot);
+        // the terminal is dark in both themes, so its accent is always the bright version
+        Put(res, "TermAccentColor", Lighten(c, 0.28));
+        Brush(res, "TermAccentBrush", Lighten(c, 0.28));
         Brush(res, "AccentSoftBrush", Color.FromArgb(0x33, c.R, c.G, c.B));
         Brush(res, "AccentEdgeBrush", Color.FromArgb(0x66, c.R, c.G, c.B));
 

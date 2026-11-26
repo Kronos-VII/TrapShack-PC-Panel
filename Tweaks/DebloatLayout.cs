@@ -14,7 +14,7 @@ public static partial class Catalog
         ("Privacy & suggested content", "\uE72E", new[]
         {
             "extra.telemetry", "extra.activity", "rd.suggestions", "rd.lockscreen-tips", "extra.location", "rd.find-my-device",
-            "extra.tweaksconsumerfeatures", "clean.lockscreen",
+            "extra.tweaksconsumerfeatures", "clean.lockscreen", "clean.oosu",
         }),
         ("Windows AI", "\uE794", new[]
         {
@@ -63,7 +63,7 @@ public static partial class Catalog
         ("Browsers & apps", "\uE774", new[]
         {
             "browsers.edge-debloat", "rd.edge-ads", "browsers.edge-remove", "browsers.brave-debloat", "clean.new-outlook", "debloat.onedrive",
-            "clean.razer-block", "clean.logi-block",
+            "clean.razer-block", "clean.logi-block", "clean.adobe-block",
         }),
         ("Network", "\uE701", new[]
         {

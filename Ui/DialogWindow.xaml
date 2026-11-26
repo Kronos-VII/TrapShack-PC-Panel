@@ -4,8 +4,8 @@
         WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize" ShowInTaskbar="False"
         SizeToContent="Height" Width="500" MaxHeight="680"
         WindowStartupLocation="CenterOwner" Background="Transparent"
-        FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="{StaticResource TextBrush}">
-    <Border Background="#101014" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" CornerRadius="14"
+        FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="{DynamicResource TextBrush}">
+    <Border Background="{DynamicResource Ink_FF101014}" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" CornerRadius="14"
             MouseLeftButtonDown="OnDrag">
         <Grid Margin="28,26,28,24">
             <Grid.RowDefinitions>
@@ -18,7 +18,7 @@
 
             <ScrollViewer Grid.Row="1" Margin="0,14,0,22" VerticalScrollBarVisibility="Auto">
                 <TextBlock x:Name="MessageText" FontSize="13.5" LineHeight="21" TextWrapping="Wrap"
-                           Foreground="#C9C9D3"/>
+                           Foreground="{DynamicResource Ink_FFC9C9D3}"/>
             </ScrollViewer>
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">

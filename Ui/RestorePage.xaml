@@ -1,0 +1,98 @@
+<UserControl x:Class="TrapShack.Ui.RestorePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:TrapShack.Ui">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="B2V"/>
+
+        <!-- one restore point: a slim row -->
+        <DataTemplate DataType="{x:Type ui:RestoreVM}">
+            <Border x:Name="Row" Padding="16,11,12,11" BorderBrush="{DynamicResource Ink_FF1D1D23}" BorderThickness="0,1,0,0" Background="Transparent">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="34" Height="34" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,13,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Description}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Description}"/>
+                        <TextBlock Text="{Binding Kind}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding When}" FontSize="12.5"/>
+                        <TextBlock Text="{Binding Ago}" FontSize="11.5" Foreground="{DynamicResource FaintBrush}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="3" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" VerticalAlignment="Center" Click="OnDelete"
+                            IsEnabled="{Binding NotBusy}" ToolTip="Delete this restore point">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="11" Margin="0,1,6,0" Foreground="{DynamicResource AccentHotBrush}"/>
+                            <TextBlock Text="Delete"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource Ink_FF16161C}"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="34,4,34,12">
+            <TextBlock Text="TOOLS" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
+            <TextBlock Text="Restore points" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+                       Text="Snapshots of Windows' settings and system files. Make one before big changes; go back to one with Windows' own System Restore if something goes wrong."/>
+        </StackPanel>
+
+        <!-- status and actions -->
+        <Border Grid.Row="1" Margin="34,0,34,12" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
+                CornerRadius="16" Padding="20,16">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border Width="44" Height="44" CornerRadius="13" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{DynamicResource AccentHotBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock x:Name="StatusTitle" Text="Checking System Restore…" FontSize="15" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="StatusLine" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="TurnOnBtn" Style="{StaticResource GhostButton}" Content="Turn on System Restore" Margin="0,0,10,0" Visibility="Collapsed" Click="OnTurnOn"/>
+                    <Button x:Name="RestoreBtn" Style="{StaticResource GhostButton}" Content="Go back to a restore point" Margin="0,0,10,0" Click="OnOpenRestore"
+                            ToolTip="Opens Windows' System Restore, where you pick the point to go back to"/>
+                    <Button x:Name="CreateBtn" Style="{StaticResource PrimaryButton}" Click="OnCreate">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="0,1,8,0"/>
+                            <TextBlock Text="Create restore point"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="34,0,34,20">
+                <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14" ClipToBounds="True">
+                    <StackPanel>
+                        <Grid Margin="16,12,16,10">
+                            <TextBlock Text="RESTORE POINTS ON THIS PC" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FaintBrush}"/>
+                            <TextBlock x:Name="CountText" FontSize="11.5" Foreground="{DynamicResource FaintBrush}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <TextBlock x:Name="Empty" Margin="16,4,16,16" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Text="Looking for restore points…"/>
+                        <ItemsControl x:Name="Points"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

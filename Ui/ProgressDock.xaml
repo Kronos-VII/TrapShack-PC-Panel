@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:TrapShack.Ui">
     <Border x:Name="Card" MinWidth="460" MaxWidth="760" Margin="24,0,24,22" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-            Background="#131317" BorderBrush="#34343D" BorderThickness="1" CornerRadius="14" Opacity="0">
+            Background="{DynamicResource Ink_FF131317}" BorderBrush="{DynamicResource Ink_FF34343D}" BorderThickness="1" CornerRadius="14" Opacity="0">
         <Border.Effect>
             <DropShadowEffect BlurRadius="32" ShadowDepth="8" Opacity="0.55" Color="Black"/>
         </Border.Effect>
@@ -31,7 +31,7 @@
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
                         <TextBlock x:Name="TitleText" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="SubText" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis"
+                        <TextBlock x:Name="SubText" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis"
                                    Margin="0,2,0,0"/>
                     </StackPanel>
 
@@ -44,7 +44,7 @@
                             </StackPanel>
                         </Button>
                         <TextBlock x:Name="PercentText" FontSize="13" FontWeight="SemiBold" MinWidth="40" TextAlignment="Right"
-                                   Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <Button x:Name="CancelBtn" Grid.Column="3" Style="{StaticResource GhostButton}" Content="Stop" FontSize="12.5"

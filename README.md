@@ -25,9 +25,12 @@ Ui/        page list (PageDefs.cs), what "recommended" means (Recommended.cs), v
 
 ## Pages
 * **Home** (a small start page), **System info** (hardware details, live temperatures) and **Search settings**.
-* **Utilities**: Windows' own repair tools (DISM then SFC, Windows Update reset, network fixes, drive optimise, Xbox and audio fixes, reports) run in the built-in terminal, plus shortcuts to Windows tools. Edit `Core/UtilityCatalog.cs` to add more.
+* **Utilities**: Windows' own repair tools (DISM then SFC, Windows Update reset, network fixes, drive optimise, Xbox and audio fixes, reports) run in a pop-up terminal that only opens while a tool runs, plus shortcuts to Windows tools. Edit `Core/UtilityCatalog.cs` to add more.
 * **PC Cleaner**: scans for temporary files and caches with the safe winapp2.ini rules, then cleans what you keep ticked (see Assets/Cleaner/LICENSES.txt).
-* **Settings** has a colour wheel for the accent colour; the whole app recolours as you drag.
+* **Settings** has a colour wheel for the accent colour (the whole app recolours as you drag), a **Light theme** switch (soft grey, the terminal stays dark),
+  and **Profiles**: *Save profile* writes the settings that are on to a `.tsprofile` file; *Load profile* applies that file on another PC
+  (restore point first, settings that don't suit that PC are skipped).
+* **Utilities → DNS**: switch every connected adapter to Cloudflare, Google or Quad9 (IPv4 and IPv6), back to Automatic, or time each server from this PC.
 * **Debloat**: one page of category cards (privacy, Windows AI, Start menu, taskbar, File Explorer, system ...) with switches and drop-downs, plus **Debloat apps** and **Apps**. Edit `Tweaks/DebloatLayout.cs` to change the cards.
 * **Optimizations**: a hub page that opens Gaming & Performance, Privacy & Security, Notifications, Power, Sound, Update and Customization.
 Edit `Ui/PageDefs.cs` to rename, reorder or move pages.
@@ -35,7 +38,7 @@ Edit `Ui/PageDefs.cs` to rename, reorder or move pages.
 ## Apply recommended, Undo, Revert
 Each page and hub has a **Quick actions** menu: *Apply recommended settings* and *Revert all to Windows defaults*. Applying creates a
 restore point first, is all-or-nothing per setting, and survives restarts (settings are written to the registry, services and tasks).
-Debloat's recommended set is the list in `Ui/Recommended.cs` (activity history, consumer features, folder discovery, WPBT, location, services, telemetry, Delivery Optimization, Disk Cleanup, temp files, End Task). Disk Cleanup and temp files are one-time "Run now" actions. On Optimizations pages, "recommended" follows the published per-setting recommended values: settings with id `opt.*` carry their own
+Debloat's recommended set is the list in `Ui/Recommended.cs` (the standard debloat set plus the second source's safe-for-everyone defaults). Disk Cleanup and temp files are one-time "Run now" actions. On Optimizations pages, "recommended" follows the published per-setting recommended values: settings with id `opt.*` carry their own
 verdict, and `Recommended.OptimizationRecommended` lists the others. Every setting that has a recommended value counts, including
 ones the source marks as a personal preference. The exceptions are Caution items (security features, printing, UAC and similar), which are never applied automatically.
 
@@ -44,6 +47,9 @@ ones the source marks as a personal preference. The exceptions are Caution items
 * TrapShack saves the original value of everything it changes in `%ProgramData%\TrapShack\state.json`, and logs to
   `%ProgramData%\TrapShack\trapshack.log`.
 * The Store, App Installer and the Xbox sign-in pieces are never removed.
+* **O&O ShutUp10++** (Debloat → Privacy) is downloaded from O&O's own server, run only if its O&O Software signature checks out, and opened after a restore point and a backup of your policy keys.
+* Single switches and Run now buttons work quietly (the switch greys out while it works and only problems pop up). The progress panel only appears for batches: Apply recommended, Revert all, loading a profile.
+* The Adobe block list (Debloat → Browsers & apps) is written between marker lines in the hosts file; switching it off removes exactly that block.
 
 ## System info and temperatures
 Uses the `LibreHardwareMonitorLib` package. CPU sensors need its driver, which Windows may block with Memory Integrity on; the page

@@ -40,6 +40,12 @@ public partial class TerminalView : UserControl
     ScrollViewer? _scroller;
 
     public event Action? StopRequested;
+    public event Action? CloseRequested;
+    public event Action? DragRequested;
+
+    /// <summary>Shows a close button (used when the terminal is its own pop-up window). Hidden while something runs.</summary>
+    bool _closable;
+    public bool Closable { get => _closable; set { _closable = value; CloseBtn.Visibility = value ? Visibility.Visible : Visibility.Collapsed; } }
 
     public TerminalView()
     {
@@ -117,7 +123,7 @@ public partial class TerminalView : UserControl
         if (caption != null) Caption.Text = caption;
         var (text, brushKey) = state switch
         {
-            TermState.Running => ("Running", "AccentHotBrush"),
+            TermState.Running => ("Running", "TermAccentBrush"),
             TermState.Done => ("Done", "GreenBrush"),
             TermState.Failed => ("Problem", "AmberBrush"),
             TermState.Stopped => ("Stopped", "AmberBrush"),
@@ -132,6 +138,7 @@ public partial class TerminalView : UserControl
         var running = state == TermState.Running;
         if (StopRequested != null && !_compact) StopBtn.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
         ClearBtn.IsEnabled = !running;
+        if (_closable) CloseBtn.Visibility = running ? Visibility.Collapsed : Visibility.Visible;
         if (running)
         {
             RunBar.Opacity = 1;
@@ -151,6 +158,8 @@ public partial class TerminalView : UserControl
 
     void OnStop(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
     void OnClear(object sender, RoutedEventArgs e) => Clear();
+    void OnCloseClick(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
+    void OnTitleDown(object sender, System.Windows.Input.MouseButtonEventArgs e) => DragRequested?.Invoke();
 
     void OnCopy(object sender, RoutedEventArgs e)
     {
