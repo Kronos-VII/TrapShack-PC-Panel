@@ -131,6 +131,9 @@ public partial class MainWindow : Window, IPageHost
         Navigate("home");
         FadeOutSplash();
 
+        CheckReady.TrySetResult();
+        if (CheckMode) return;   // the page check opens every page itself; no questions, and nothing written
+
         await OfferToFinishInterruptedApplyAsync();
 
         if (!_engine.State.Has("app.welcomed"))
@@ -1722,7 +1725,7 @@ public partial class MainWindow : Window, IPageHost
     UpdateInfo? _update;
 
     /// <summary>Where releases are published. Kept in code only; the Settings page just shows a GitHub mark and the button.</summary>
-    const string UpdateRepo = "Kronos-VII/TrapShack-PC-Panel";
+    internal const string UpdateRepo = "Kronos-VII/TrapShack-PC-Panel";
 
     void ShowUpdateSetting()
     {

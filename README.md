@@ -92,16 +92,23 @@ GPU and game shader caches (NVIDIA, AMD, Intel, DirectX, Steam's shader pre-cach
 listed as their own rules and are **not ticked by default**: deleting them makes games rebuild their shaders, which
 stutters for a while. They are still measured, so you can see their size and tick them when you want them gone.
 
-## Testing every setting safely
-The program has a self-test that switches every setting on, checks Windows reports it, switches it off and checks
-that every value is back exactly as it was. It only runs inside Windows Sandbox or on a GitHub build machine (both are
-thrown away afterwards); started anywhere else it refuses and closes. Normal use never runs it.
+## Testing everything
+**Test everything.bat** (stays on your PC, never pushed) is the one test. Double-click it and leave its window open:
 
-* **Test in Sandbox.bat**: after build.bat, double-click it. Windows Sandbox opens, the test runs inside it, and the
-  report opens on your PC when it's done (`Self-test results\TrapShack self-test.txt`). Needs Windows Sandbox turned on
-  (Windows 11 Pro: "Turn Windows features on or off" > Windows Sandbox).
-* **GitHub**: every push builds the program and runs the self-test on a Windows build machine
-  (`.github/workflows/build-and-test.yml`). The finished program and the report are attached to each run under Actions.
+1. It builds the app.
+2. **This PC, reads only.** Windows asks for permission (Yes). The app reads every setting's state, the hardware,
+   the sensors, startup apps, restore points, what the cleaner would find (nothing is deleted), winget and the
+   Utilities' programs, then opens every page once and saves a picture of it. Every value the app can change is read
+   before and after, and the report shows they're identical. Nothing is switched, removed, cleaned or installed.
+3. **Windows Sandbox, everything for real** (a throwaway copy of Windows, wiped when it closes): every page, every
+   setting switched on, checked, switched off and checked to be exactly as before, then every feature, every utility,
+   the one-time actions and the app removals. It refuses to run anywhere but the Sandbox or a GitHub build machine.
+4. Everything is packed into **TrapShack test results.zip** next to the .bat. Send that one file.
 
-Left out of the test: one-time actions, app removals, and the few settings that uninstall something or need DISM
-(the report lists them with the reason).
+Needs Windows Sandbox turned on for part 3 (Windows 11 Pro: "Turn Windows features on or off" > Windows Sandbox);
+without it, parts 1, 2 and 4 still run. Only left out, everywhere: decrypting BitLocker, opening O&O ShutUp10++'s own
+window (it's downloaded and its signature checked), and the 10 to 30 minute Windows repairs (DISM and SFC, and Disk
+Cleanup, which ends with the same DISM cleanup), whose programs are checked to exist.
+
+**GitHub**: every push builds the program and runs the settings test on a Windows build machine
+(`.github/workflows/build-and-test.yml`). The finished program and the report are attached to each run under Actions.

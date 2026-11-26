@@ -28,14 +28,22 @@ public partial class DialogWindow : Window
 
 public static class Dialogs
 {
+    /// <summary>
+    /// Only set by the page check: instead of showing a question, it is noted down and answered "no" (Cancel), so
+    /// nothing is ever started by a question the check can't answer.
+    /// </summary>
+    public static Action<string, string>? Intercept;
+
     public static bool Confirm(Window owner, string title, string message, string ok = "Continue", string cancel = "Cancel")
     {
+        if (Intercept != null) { Intercept(title, message); return false; }
         var d = new DialogWindow(title, message, ok, cancel) { Owner = owner };
         return d.ShowDialog() == true;
     }
 
     public static void Info(Window owner, string title, string message)
     {
+        if (Intercept != null) { Intercept(title, message); return; }
         var d = new DialogWindow(title, message, "OK", null) { Owner = owner };
         d.ShowDialog();
     }

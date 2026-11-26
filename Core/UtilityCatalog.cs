@@ -69,11 +69,19 @@ public static class UtilityCatalog
                 new UtilStep("Stop Windows Update", "net.exe", "stop wuauserv /y", AnyExitIsFine: true),
                 new UtilStep("Stop background transfers", "net.exe", "stop bits /y", AnyExitIsFine: true),
                 new UtilStep("Stop cryptographic services", "net.exe", "stop cryptsvc /y", AnyExitIsFine: true),
+                // Windows sometimes starts a service straight back up and keeps its folder locked, so each rename is
+                // tried a few times, stopping that service again in between. catroot2 is only a signature cache: if
+                // Windows still holds it, it's left as it is and the reset still works.
                 new UtilStep("Set aside the update cache", PS, Ps(
                     "$t = Get-Date -Format yyyyMMddHHmmss; " +
-                    "Rename-Item -Path (Join-Path $env:SystemRoot 'SoftwareDistribution') -NewName ('SoftwareDistribution.old' + $t) -ErrorAction Stop; " +
-                    "Rename-Item -Path (Join-Path $env:SystemRoot 'System32\\catroot2') -NewName ('catroot2.old' + $t) -ErrorAction Stop; " +
-                    "Write-Output 'Update cache folders renamed. Windows creates fresh ones.'")),
+                    "function Set-Aside($path, $service) { for ($i = 0; $i -lt 5; $i++) { " +
+                    "try { Rename-Item -Path $path -NewName ((Split-Path $path -Leaf) + '.old' + $t) -ErrorAction Stop; return $true } " +
+                    "catch { Stop-Service -Name $service -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 } }; return $false }; " +
+                    "if (-not (Set-Aside (Join-Path $env:SystemRoot 'SoftwareDistribution') 'wuauserv')) { " +
+                    "Write-Output 'Windows is still using the update cache (SoftwareDistribution). Restart the PC and run this again.'; exit 1 }; " +
+                    "Write-Output 'Update cache set aside. Windows makes a fresh one.'; " +
+                    "if (Set-Aside (Join-Path $env:SystemRoot 'System32\\catroot2') 'cryptsvc') { Write-Output 'Signature cache (catroot2) set aside too.' } " +
+                    "else { Write-Output 'Windows is using the signature cache (catroot2) right now, so it was left as it is. That is fine.' }")),
                 new UtilStep("Start cryptographic services", "net.exe", "start cryptsvc", AnyExitIsFine: true),
                 new UtilStep("Start background transfers", "net.exe", "start bits", AnyExitIsFine: true),
                 new UtilStep("Start Windows Update", "net.exe", "start wuauserv", AnyExitIsFine: true),

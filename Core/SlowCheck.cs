@@ -21,4 +21,7 @@ public static class SlowCheck
     }
 
     public static void Forget(string key) => Answers.TryRemove(key, out _);
+
+    /// <summary>Drops every remembered answer, so the next read asks Windows again (used by the PC scan).</summary>
+    public static void ForgetAll() => Answers.Clear();
 }

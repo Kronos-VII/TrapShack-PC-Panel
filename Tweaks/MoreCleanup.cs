@@ -88,9 +88,12 @@ public static partial class Catalog
             Sometimes,
             L(new CustomAction(
                 "Run DISM /Online /Set-ReservedStorageState /State:Disabled (restore sets it to Enabled)",
-                isApplied: () => RegUtil.ReadInt(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\ReserveManager", "ShippedWithReserves") == 0,
-                apply: () => Dism("/Online /Set-ReservedStorageState /State:Disabled"),
-                revert: _ => Dism("/Online /Set-ReservedStorageState /State:Enabled"))),
+                // Windows' own answer (the same state DISM /Get-ReservedStorageState reports). ShippedWithReserves only
+                // records how Windows was set up, and DISM doesn't change it, so it can't tell whether this is on.
+                isApplied: () => SlowCheck.Get("reserved-storage.off", () =>
+                    Shell.PowerShell("(Get-WindowsReservedStorageState).ReservedStorageState", 60_000).Output.Trim().Equals("Disabled", StringComparison.OrdinalIgnoreCase)),
+                apply: () => { SlowCheck.Forget("reserved-storage.off"); Dism("/Online /Set-ReservedStorageState /State:Disabled"); },
+                revert: _ => { SlowCheck.Forget("reserved-storage.off"); Dism("/Online /Set-ReservedStorageState /State:Enabled"); })),
             detail: "Updates may fail if the disk is almost full afterwards. Keep some free space.",
             risk: Risk.Advanced, restart: true);
 

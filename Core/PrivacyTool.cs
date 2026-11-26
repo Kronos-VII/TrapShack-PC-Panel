@@ -57,6 +57,18 @@ public static class PrivacyTool
         Log.Info("OOSU launched");
     }
 
+    /// <summary>
+    /// Used only by the Sandbox test: downloads the tool, checks its signature and makes the policy backup, without
+    /// opening the tool (it's a window someone has to use).
+    /// </summary>
+    internal static string TestWithoutOpening()
+    {
+        Directory.CreateDirectory(ToolsDir);
+        BackupPolicies();
+        var exe = Download();
+        return "downloaded from O&O's server, signature verified as O&O Software (" + new FileInfo(exe).Length / 1024 + " KB), policy backup written";
+    }
+
     static string Download()
     {
         var tmp = Cached + ".download";

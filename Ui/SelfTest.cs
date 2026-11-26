@@ -114,17 +114,27 @@ public static class SelfTest
         return results.Count(r => r.Outcome == "FAIL") + problems.Count;
     }
 
-    static Result TestOne(TweakEngine engine, SystemInfo sys, Tweak t)
+    internal static Result TestOne(TweakEngine engine, SystemInfo sys, Tweak t, bool includeLeftOut = false)
     {
-        Result R(string outcome, string? detail = null) => new(t.Id, t.Title, outcome, detail);
+        var forced = false;
+        Result R(string outcome, string? detail = null) =>
+            new(t.Id, t.Title, outcome, forced && outcome == "PASS" ? "tested here even though it's not for this PC (it only changes registry values)" + (detail != null ? "; " + detail : "") : detail);
 
         if (t.OneShot) return R("SKIP", "one-time action (nothing to undo)");
         if (t.StoreRestore || t.Actions.OfType<AppxAction>().Any()) return R("SKIP", "removes apps (they come back only from the Microsoft Store)");
-        if (LeftOut.TryGetValue(t.Id, out var why)) return R("SKIP", why);
+        if (!includeLeftOut && LeftOut.TryGetValue(t.Id, out var why)) return R("SKIP", why);
         try
         {
-            if (t.Evaluate(sys).Fit == Fit.Unavailable) return R("N/A", "not for this PC: " + (t.Evaluate(sys).Note ?? ""));
             if (!engine.IsAvailable(t)) return R("N/A", "the setting doesn't exist on this copy of Windows");
+            if (t.Evaluate(sys).Fit == Fit.Unavailable)
+            {
+                // The app wouldn't offer it here (no graphics card, no Brave, older Windows ...). If it only writes
+                // registry values, it's still safe to switch on and off in a throwaway Sandbox, so it's tested anyway:
+                // that proves its switch-on and undo work, ready for the PCs it is meant for.
+                var registryOnly = t.Actions.Where(a => a.IsApplicable()).All(a => a is RegistryAction or RegistryDeleteAction);
+                if (!registryOnly) return R("N/A", "not for this PC: " + (t.Evaluate(sys).Note ?? ""));
+                forced = true;
+            }
         }
         catch (Exception ex) { return R("FAIL", "checking it crashed: " + ex.Message); }
 
@@ -178,17 +188,19 @@ public static class SelfTest
         return sb.ToString();
     }
 
-    static string Report(SystemInfo? sys, List<Result> results, List<string> problems, DateTime started, bool finished)
+    static string Report(SystemInfo? sys, List<Result> results, List<string> problems, DateTime started, bool finished, bool pcCheck = false)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("TrapShack Tweak Utility - self-test");
+        sb.AppendLine(pcCheck ? "TrapShack Tweak Utility - check on this PC" : "TrapShack Tweak Utility - self-test");
         sb.AppendLine($"Started {started:yyyy-MM-dd HH:mm}, {(finished ? $"finished after {(DateTime.Now - started).TotalMinutes:0} min" : "STILL RUNNING (or stopped part-way)")}");
-        if (sys != null) sb.AppendLine($"Windows: {sys.FriendlyOs}   CPU: {sys.Cpu}   Where: {(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" ? "GitHub build machine" : "Windows Sandbox")}");
+        if (sys != null) sb.AppendLine($"Windows: {sys.FriendlyOs}   CPU: {sys.Cpu}   Where: {(pcCheck ? "this PC" : Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" ? "GitHub build machine" : "Windows Sandbox")}");
         sb.AppendLine();
         var pass = results.Count(r => r.Outcome == "PASS");
         var fail = results.Count(r => r.Outcome == "FAIL");
-        sb.AppendLine($"PASSED {pass}   FAILED {fail}   NOT FOR THIS PC {results.Count(r => r.Outcome == "N/A")}   LEFT OUT {results.Count(r => r.Outcome == "SKIP")}   PROBLEMS IN THE LISTS {problems.Count}");
-        sb.AppendLine(fail == 0 && problems.Count == 0 ? "Everything tested came back exactly as it was." : "Send this file to get the failures fixed.");
+        sb.AppendLine(pcCheck
+            ? $"PASSED {pass}   FAILED {fail}   NOT ON THIS PC {results.Count(r => r.Outcome == "N/A")}   LEFT ALONE {results.Count(r => r.Outcome == "SKIP")}"
+            : $"PASSED {pass}   FAILED {fail}   NOT FOR THIS PC {results.Count(r => r.Outcome == "N/A")}   LEFT OUT {results.Count(r => r.Outcome == "SKIP")}   PROBLEMS IN THE LISTS {problems.Count}");
+        sb.AppendLine(fail == 0 && (pcCheck || problems.Count == 0) ? "Everything tested came back exactly as it was." : "Send this file to get the failures fixed.");
         void Section(string title, IEnumerable<Result> rows)
         {
             var list = rows.ToList();
@@ -198,36 +210,55 @@ public static class SelfTest
         }
         if (problems.Count > 0)
         {
-            sb.AppendLine().AppendLine($"==== PROBLEMS IN THE LISTS ({problems.Count})");
+            sb.AppendLine().AppendLine(pcCheck ? "==== NOTES" : $"==== PROBLEMS IN THE LISTS ({problems.Count})");
             foreach (var p in problems) sb.AppendLine("  " + p);
         }
         Section("FAILED", results.Where(r => r.Outcome == "FAIL"));
         Section("PASSED", results.Where(r => r.Outcome == "PASS"));
-        Section("NOT FOR THIS PC", results.Where(r => r.Outcome == "N/A"));
-        Section("LEFT OUT", results.Where(r => r.Outcome == "SKIP"));
+        Section(pcCheck ? "NOT ON THIS PC" : "NOT FOR THIS PC", results.Where(r => r.Outcome == "N/A"));
+        Section(pcCheck ? "LEFT ALONE" : "LEFT OUT", results.Where(r => r.Outcome == "SKIP"));
         return sb.ToString();
+    }
+    /// <summary>Copies the part of the app's log written since the check started.</summary>
+    internal static void CopyLogSince(DateTime started, string target)
+    {
+        try
+        {
+            if (!File.Exists(Log.FilePath)) return;
+            var keep = false; var sb = new StringBuilder();
+            foreach (var line in File.ReadLines(Log.FilePath))
+            {
+                if (!keep && line.Length >= 19 && DateTime.TryParse(line[..19], out var at) && at >= started.AddSeconds(-1)) keep = true;
+                if (keep) sb.AppendLine(line);
+            }
+            File.WriteAllText(target, sb.ToString(), Encoding.UTF8);
+        }
+        catch { }
     }
 
     // ------------------------------------------------------------------------------------------ the window
     /// <summary>A small progress window for the Sandbox run.</summary>
-    public static Window MakeWindow(out Action<int, int, string> progress, out Action<int, string> done)
+    public static Window MakeWindow(out Action<int, int, string> progress, out Action<int, string> done, bool pcCheck = false,
+        string? heading = null, string? runningNote = null, string? doneNote = null)
     {
         var bg = new SolidColorBrush(Color.FromRgb(0x0B, 0x0B, 0x0E));
         var muted = new SolidColorBrush(Color.FromRgb(0xA1, 0xA1, 0xAA));
         var accent = Application.Current.TryFindResource("AccentBrush") as Brush ?? Brushes.Crimson;
-        var title = new TextBlock { Text = "TrapShack self-test", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+        var title = new TextBlock { Text = heading ?? (pcCheck ? "TrapShack: check on this PC" : "TrapShack self-test"), FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
         var line = new TextBlock { Text = "Starting…", FontSize = 13, Foreground = muted, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         var bar = new ProgressBar { Height = 6, Maximum = 1, Margin = new Thickness(0, 18, 0, 0), Foreground = accent, Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x28)), BorderThickness = new Thickness(0) };
         var note = new TextBlock
         {
-            Text = "Every setting is switched on, checked, switched off and checked again. This takes several minutes. Nothing here touches your real PC.",
+            Text = runningNote ?? (pcCheck
+                ? "Each setting is switched on and straight back off, then checked to be exactly as before. Anything that doesn't come back is put back at once. Please don't use the PC until it finishes."
+                : "Every setting is switched on, checked, switched off and checked again. This takes several minutes. Nothing here touches your real PC."),
             FontSize = 12.5, Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 0),
         };
         var panel = new StackPanel { Margin = new Thickness(32) };
         panel.Children.Add(title); panel.Children.Add(line); panel.Children.Add(bar); panel.Children.Add(note);
         var w = new Window
         {
-            Title = "TrapShack self-test", Width = 560, SizeToContent = SizeToContent.Height, Background = bg,
+            Title = heading ?? (pcCheck ? "TrapShack PC check" : "TrapShack self-test"), Width = 560, SizeToContent = SizeToContent.Height, Background = bg,
             WindowStartupLocation = WindowStartupLocation.CenterScreen, ResizeMode = ResizeMode.NoResize, Content = panel,
         };
         progress = (i, n, name) => w.Dispatcher.InvokeAsync(() =>
@@ -238,9 +269,20 @@ public static class SelfTest
         done = (failures, path) => w.Dispatcher.InvokeAsync(() =>
         {
             bar.Value = 1;
-            title.Text = failures < 0 ? "Self-test stopped with an error" : failures == 0 ? "Self-test passed" : $"Self-test finished: {failures} to fix";
+            if (heading != null)
+            {
+                title.Text = failures < 0 ? heading + ": stopped with an error" : failures == 0 ? heading + ": everything passed" : $"{heading}: {failures} to fix";
+                line.Text = "Summary: " + path;
+                note.Text = doneNote ?? "";
+                return;
+            }
+            title.Text = failures < 0 ? (pcCheck ? "Check stopped with an error" : "Self-test stopped with an error")
+                       : failures == 0 ? (pcCheck ? "Check passed" : "Self-test passed")
+                       : $"{(pcCheck ? "Check" : "Self-test")} finished: {failures} to fix";
             line.Text = "The report is saved as " + path;
-            note.Text = "You can close the Sandbox now. The report is in the \"Self-test results\" folder next to Test in Sandbox.bat. Send that file over.";
+            note.Text = pcCheck
+                ? "You can close this window."
+                : "You can close the Sandbox now. The report is in the \"Test results\" folder next to Test everything.bat.";
         });
         return w;
     }
