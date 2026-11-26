@@ -5,23 +5,25 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="B2V"/>
 
-        <!-- one utility inside a section card -->
+        <!-- one utility: a small card with its own Run / Open button -->
         <DataTemplate DataType="{x:Type ui:UtilVM}">
-            <Border x:Name="Row" Padding="8,8,6,8" CornerRadius="9" Background="Transparent">
+            <Border x:Name="Row" Padding="12,10,10,10" CornerRadius="11" BorderThickness="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}"
+                    ui:Fx.Glow="True" ui:Fx.Rise="True">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Ink_FF1A1A21}" Margin="0,0,11,0" VerticalAlignment="Top">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Ink_FF1D1D24}" Margin="0,1,11,0" VerticalAlignment="Top">
                         <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" LineHeight="15" Margin="0,2,0,0"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
+                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                   MaxHeight="48" LineHeight="16" Margin="0,2,0,0" ToolTip="{Binding Desc}"/>
                     </StackPanel>
-                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" Margin="10,0,0,0" VerticalAlignment="Center"
-                            Click="OnRunTool" IsEnabled="{Binding CanRun}" MinWidth="64">
+                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" Margin="10,0,0,0" VerticalAlignment="Top"
+                            Click="OnRunTool" IsEnabled="{Binding CanRun}" MinWidth="72">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding ButtonGlyph}" FontFamily="{StaticResource IconFont}" FontSize="10.5" Margin="0,1,6,0" Foreground="{DynamicResource AccentHotBrush}"/>
                             <TextBlock Text="{Binding ButtonText}"/>
@@ -31,34 +33,35 @@
             </Border>
             <DataTemplate.Triggers>
                 <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
-                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource Ink_FF16161C}"/>
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentHoverBorderBrush}"/>
                 </Trigger>
                 <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentPanelBorderBrush}"/>
                     <Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- one section card -->
+        <!-- one section: a header line, then its tools in an even grid across the full width -->
         <DataTemplate x:Key="UtilCard" DataType="{x:Type ui:UtilSectionVM}">
-            <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14" Padding="10,12,10,8"
-                    ui:Fx.Rise="True">
-                <StackPanel>
-                    <Grid Margin="6,0,6,6">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0">
-                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding Blurb}" FontSize="11" Foreground="{DynamicResource FaintBrush}" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                    </Grid>
-                    <Rectangle Height="1" Fill="{DynamicResource Ink_FF1E1E25}" Margin="6,2,6,2"/>
-                    <ItemsControl ItemsSource="{Binding Tools}"/>
-                </StackPanel>
-            </Border>
+            <StackPanel Margin="0,0,0,16">
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
+                               VerticalAlignment="Center" Margin="0,0,9,0"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Blurb}" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="10,1,0,0"/>
+                    </StackPanel>
+                    <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource Ink_FF1E1E25}" VerticalAlignment="Center" Margin="14,2,0,0"/>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Tools}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="300" Gap="10"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </StackPanel>
         </DataTemplate>
 
         <!-- a Windows tool shortcut -->
@@ -101,15 +104,11 @@
         <Grid Grid.Row="1" Margin="34,0,34,18">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource UtilCard}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><ui:MasonryPanel Columns="3" MinColumnWidth="320" Gap="12"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource UtilCard}"/>
 
                     <!-- Windows tools -->
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14"
-                            Padding="16,12,16,8" Margin="0,12,0,0">
+                            Padding="16,12,16,8" Margin="0,0,0,0">
                         <StackPanel>
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

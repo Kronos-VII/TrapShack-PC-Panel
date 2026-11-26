@@ -48,7 +48,7 @@
         <!-- one category card -->
         <DataTemplate x:Key="CleanCard" DataType="{x:Type ui:CleanCategoryVM}">
             <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14" Padding="10,12,10,8"
-                    ui:Fx.Rise="True">
+                    Margin="0,0,0,12" ui:Fx.Rise="True">
                 <StackPanel>
                     <Grid Margin="6,0,4,8">
                         <Grid.ColumnDefinitions>
@@ -68,7 +68,12 @@
                                   VerticalAlignment="Center" ToolTip="Tick or untick everything in this group"/>
                     </Grid>
                     <Rectangle Height="1" Fill="{DynamicResource Ink_FF1E1E25}" Margin="6,0,6,4"/>
-                    <ItemsControl ItemsSource="{Binding Rules}"/>
+                    <!-- the rules flow across the full width of the card instead of one long column -->
+                    <ItemsControl ItemsSource="{Binding Rules}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><ui:AdaptiveGrid Columns="4" MinItemWidth="250" Gap="6"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -178,11 +183,7 @@
         <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="34,0,34,20">
                 <TextBlock x:Name="Loading" Text="Finding the programs on this PC…" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0"/>
-                <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource CleanCard}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><ui:MasonryPanel Columns="3" MinColumnWidth="290" Gap="12"/></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource CleanCard}"/>
                 <TextBlock Text="Cleaning rules: winapp2.ini (CC BY-SA 4.0)" FontSize="11" Foreground="{DynamicResource Ink_FF4C4C57}" Margin="2,14,0,0"/>
             </StackPanel>
         </ScrollViewer>

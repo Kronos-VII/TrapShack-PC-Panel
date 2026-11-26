@@ -84,6 +84,18 @@ if ($Debug) {
     exit 0
 }
 
+# The finished exe can't be replaced while the app is open, so close it first.
+$running = @(Get-Process -Name 'TrapShack Tweak Utility', 'TrapShackTweakUtility' -ErrorAction SilentlyContinue)
+if ($running.Count -gt 0) {
+    Step "Closing the running TrapShack Tweak Utility so the new version can replace it"
+    $running | ForEach-Object { try { $_.CloseMainWindow() | Out-Null } catch { } }
+    Start-Sleep -Seconds 3
+    $running = @(Get-Process -Name 'TrapShack Tweak Utility', 'TrapShackTweakUtility' -ErrorAction SilentlyContinue)
+    if ($running.Count -gt 0) {
+        Fail "TrapShack Tweak Utility is still open (it may be busy applying something). Close it, then run build.bat again."
+    }
+}
+
 Step "Building TrapShack Tweak Utility (Release, single file). The first build downloads packages and takes a minute or two"
 & dotnet publish 'TrapShack Tweak Utility.csproj' -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -96,7 +108,12 @@ $built = Join-Path $PSScriptRoot 'dist\TrapShackTweakUtility.exe'
 if (-not (Test-Path $built)) { Fail "The build said it finished, but $built is missing." }
 # Give the finished program its proper name.
 $exe = Join-Path $PSScriptRoot 'dist\TrapShack Tweak Utility.exe'
-if (Test-Path $exe) { Remove-Item $exe -Force }
+for ($i = 0; $i -lt 5 -and (Test-Path $exe); $i++) {
+    try { Remove-Item $exe -Force -ErrorAction Stop } catch { Start-Sleep -Seconds 1 }
+}
+if (Test-Path $exe) {
+    Fail "The old dist\TrapShack Tweak Utility.exe is still in use. Close TrapShack Tweak Utility, then run build.bat again."
+}
 Move-Item $built $exe
 Get-ChildItem (Join-Path $PSScriptRoot 'dist') -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
 

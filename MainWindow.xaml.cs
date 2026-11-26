@@ -267,6 +267,11 @@ public partial class MainWindow : Window, IPageHost
         Navigate(key);
     }
 
+    void OnHomeJump(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is string key) SelectNav(key);
+    }
+
     void OnHubRowClick(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).Tag is string key) SelectNav(key);
@@ -315,6 +320,7 @@ public partial class MainWindow : Window, IPageHost
         PageCrumb.Cursor = area ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
         PageTitle.Text = page.Title;
         PageSubtitle.Text = page.Subtitle;
+        _groupFilter = null;
         SearchBox.Text = "";
 
         ApplyPageView();
@@ -361,29 +367,52 @@ public partial class MainWindow : Window, IPageHost
         if (_page == null || _vms == null) return;
         var q = SearchBox.Text.Trim();
         var key = _page.Key;
-        var view = new ListCollectionView(_vms.Where(v => v.PageKey == key).ToList());
-        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TweakVM.Group)));
-        if (q.Length > 0)
-            view.Filter = o => o is TweakVM t &&
-                (t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                 t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                 (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+        var pageItems = _vms.Where(v => v.PageKey == key).ToList();
         _searching = q.Length > 0;
+        var cards = key == "debloat";   // the Debloat page is laid out as category cards; every other page as tiles
 
-        // The Debloat page is laid out as category cards; every other page as tiles.
-        var cards = key == "debloat";
+        // group chips: "All" plus one per group, so a long page can be narrowed to one group
+        var groups = cards
+            ? Catalog.DebloatLayout.Select(l => l.Section).Where(g => pageItems.Any(v => v.Group == g)).ToList()
+            : pageItems.Select(v => v.Group).Distinct().ToList();
+        if (_groupFilter != null && !groups.Contains(_groupFilter)) _groupFilter = null;
+        var filter = _searching ? null : _groupFilter;   // searching always looks through the whole page
+        var chips = new List<GroupChip> { new("All", pageItems.Count, null, filter == null) };
+        chips.AddRange(groups.Select(g => new GroupChip(g, pageItems.Count(v => v.Group == g), g, filter == g)));
+        GroupChips.ItemsSource = chips;
+        GroupChips.Visibility = groups.Count > 1 && !_searching ? Visibility.Visible : Visibility.Collapsed;
+
+        var view = new ListCollectionView(pageItems);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TweakVM.Group)));
+        view.Filter = o => o is TweakVM t &&
+            (filter == null || t.Group == filter) &&
+            (q.Length == 0 ||
+             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+             t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+             (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
         PanelScroll.Visibility = cards ? Visibility.Visible : Visibility.Collapsed;
         TweakScroll.Visibility = cards ? Visibility.Collapsed : Visibility.Visible;
         QuickBtnText.Text = cards ? "Quick select" : "Quick actions";
-        if (cards) { TweakList.ItemsSource = null; BuildDebloatCards(q); return; }
+        if (cards) { TweakList.ItemsSource = null; BuildDebloatCards(q, filter); return; }
         PanelList.ItemsSource = null;
         TweakList.ItemsSource = view;
     }
 
     List<DebloatCategoryVM> _cards = new();
 
+    string? _groupFilter;
+    public sealed record GroupChip(string Title, int Count, string? Key, bool Selected);
+
+    void OnGroupChip(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not GroupChip c || c.Key == _groupFilter) return;
+        _groupFilter = c.Key;
+        ApplyPageView();
+        TweakScroll.ScrollToTop(); PanelScroll.ScrollToTop();
+    }
+
     /// <summary>Builds the Debloat page: one card per category, in the order of Catalog.DebloatLayout; drop-downs for settings that share one value.</summary>
-    void BuildDebloatCards(string q)
+    void BuildDebloatCards(string q, string? only = null)
     {
         bool Hit(TweakVM t) => q.Length == 0 ||
             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -391,6 +420,7 @@ public partial class MainWindow : Window, IPageHost
         var cards = new List<DebloatCategoryVM>();
         foreach (var (section, glyph, _) in Catalog.DebloatLayout)
         {
+            if (only != null && section != only) continue;
             var items = _vms.Where(v => v.PageKey == "debloat" && v.Group == section).ToList();
             var rows = new List<object>();
             var done = new HashSet<string>();

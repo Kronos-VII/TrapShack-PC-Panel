@@ -21,3 +21,10 @@ public sealed class InverseBoolToVisibility : System.Windows.Data.IValueConverte
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
         throw new NotSupportedException();
 }
+
+/// <summary>Title and line for a quick-jump tile on the Home page.</summary>
+public sealed class HomeTileInfo
+{
+    public string Title { get; set; } = "";
+    public string Sub { get; set; } = "";
+}

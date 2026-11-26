@@ -87,12 +87,13 @@ public sealed class TweakVM : INotifyPropertyChanged
     }
 
     public bool HasTags => Tags.Length > 0;
+    public bool HasFooter => FitText.Length > 0 || HasTags;
 
     public void SetOn(bool on)
     {
         _isOn = on;
         // Always raise, even if the value is unchanged, so a ToggleButton the user clicked snaps back to the real state.
-        foreach (var name in new[] { nameof(IsOn), nameof(CanToggle), nameof(FitKind), nameof(FitText), nameof(Note), nameof(HasNote) })
+        foreach (var name in new[] { nameof(IsOn), nameof(CanToggle), nameof(FitKind), nameof(FitText), nameof(Note), nameof(HasNote), nameof(HasFooter) })
             Raise(name);
     }
 
