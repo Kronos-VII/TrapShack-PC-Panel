@@ -1154,7 +1154,7 @@
                                     </StackPanel>
                                     <Grid Grid.Column="3" VerticalAlignment="Center">
                                         <Button x:Name="CatRecBtn" Style="{StaticResource PrimaryButton}" Height="36" Click="OnCatRecommended"/>
-                                        <TextBlock x:Name="CatRecDone" Text="&#xE73E;  Recommended are on" FontSize="12.5" Foreground="{DynamicResource GreenBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="CatRecDone" FontSize="12.5" Foreground="{DynamicResource GreenBrush}" VerticalAlignment="Center"><Run Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11"/><Run Text="  Recommended are on"/></TextBlock>
                                     </Grid>
                                 </Grid>
                             </Border>
