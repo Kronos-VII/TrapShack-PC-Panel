@@ -5,25 +5,23 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="B2V"/>
 
-        <!-- one utility: a small card with its own Run / Open button -->
+        <!-- one utility: the same 64 px row as every list page, with its Run / Open button where a switch would be -->
         <DataTemplate DataType="{x:Type ui:UtilVM}">
-            <Border x:Name="Row" Padding="12,10,10,10" CornerRadius="11" BorderThickness="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}"
-                    ui:Fx.Glow="True" ui:Fx.Rise="True">
+            <Border x:Name="Row" Style="{StaticResource RowShell}" ui:Fx.Glow="True" ToolTip="{Binding Desc}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Ink_FF1D1D24}" Margin="0,1,11,0" VerticalAlignment="Top">
-                        <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
+                    <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource Ink_FF1D1D24}" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
-                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
-                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                   MaxHeight="48" LineHeight="16" Margin="0,2,0,0" ToolTip="{Binding Desc}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Desc}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" Margin="10,0,0,0" VerticalAlignment="Top"
-                            Click="OnRunTool" IsEnabled="{Binding CanRun}" MinWidth="72">
+                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" Height="34" MinWidth="76" VerticalAlignment="Center"
+                            Click="OnRunTool" IsEnabled="{Binding CanRun}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding ButtonGlyph}" FontFamily="{StaticResource IconFont}" FontSize="10.5" Margin="0,1,6,0" Foreground="{DynamicResource AccentHotBrush}"/>
                             <TextBlock Text="{Binding ButtonText}"/>
@@ -32,10 +30,6 @@
                 </Grid>
             </Border>
             <DataTemplate.Triggers>
-                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
-                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
-                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentHoverBorderBrush}"/>
-                </Trigger>
                 <DataTrigger Binding="{Binding IsRunning}" Value="True">
                     <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentPanelBorderBrush}"/>
                     <Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
@@ -43,49 +37,29 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- one section: a header line, then its tools in an even grid across the full width -->
-        <DataTemplate x:Key="UtilCard" DataType="{x:Type ui:UtilSectionVM}">
-            <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Grid Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
-                               VerticalAlignment="Center" Margin="0,0,9,0"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding Blurb}" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="10,1,0,0"/>
+        <!-- a Windows tool shortcut: the same row, with Open -->
+        <DataTemplate DataType="{x:Type ui:WinToolVM}">
+            <Border Style="{StaticResource RowShell}" ui:Fx.Glow="True" ToolTip="{Binding Target}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource Ink_FF1D1D24}" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Sub}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource Ink_FF1E1E25}" VerticalAlignment="Center" Margin="14,2,0,0"/>
+                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4" Height="34" MinWidth="76" VerticalAlignment="Center" Click="OnOpenWinTool">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource IconFont}" FontSize="10.5" Margin="0,1,6,0" Foreground="{DynamicResource AccentHotBrush}"/>
+                            <TextBlock Text="Open"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
-                <ItemsControl Grid.Row="1" ItemsSource="{Binding Tools}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="300" Gap="10"/></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </Grid>
-        </DataTemplate>
-
-        <!-- a Windows tool shortcut -->
-        <DataTemplate x:Key="WinToolChip">
-            <Button Click="OnOpenWinTool" Cursor="Hand" Margin="0,0,8,8" ToolTip="{Binding Target}">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{DynamicResource Ink_FF131318}" BorderBrush="{DynamicResource Ink_FF24242B}" BorderThickness="1" CornerRadius="10" Padding="11,7">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="12.5" Foreground="{DynamicResource AccentHotBrush}"
-                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentHoverBorderBrush}"/>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Ink_FF18181E}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+            </Border>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -95,42 +69,63 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="34,4,34,12">
-            <TextBlock Text="TOOLS" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
-            <TextBlock Text="Utilities" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
-                       Text="Windows' own repair and maintenance tools, run in the right order with one click. A terminal pops up while a tool runs so you can watch it."/>
-        </StackPanel>
+        <!-- header: title left, search right -->
+        <Grid Grid.Row="0" Margin="34,4,34,20">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Bottom" Margin="0,0,20,0">
+                <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
+                <TextBlock Text="Utilities" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                           Text="Windows' own repair and maintenance tools, run in the right order with one click. A terminal pops up while a tool runs."/>
+            </StackPanel>
+            <Grid Grid.Column="1" Width="300" VerticalAlignment="Bottom">
+                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Height="40" Padding="36,0,12,0" VerticalContentAlignment="Center" FontSize="13"
+                         Background="{DynamicResource Ink_FF141418}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}"
+                         CaretBrush="{DynamicResource AccentHotBrush}"/>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SearchHint" Text="Search tools   Ctrl+F" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
+        </Grid>
 
-        <Grid Grid.Row="1" Margin="34,0,34,18">
+        <Grid Grid.Row="1" Margin="34,0,20,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="248"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel>
-                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource UtilCard}">
+                <StackPanel Margin="0,0,0,24">
+                    <TextBlock Text="CATEGORIES" Style="{StaticResource RailLabel}"/>
+                    <ItemsControl x:Name="Rail">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Style="{StaticResource RailButton}" GroupName="utilrail" IsChecked="{Binding Selected, Mode=OneWay}" Checked="OnRailChecked"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="Scroller" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,14,24">
+                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="12" Padding="18,14" Margin="0,0,0,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="PaneGlyph" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="PaneTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="PaneDesc" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <TextBlock x:Name="NoMatch" Text="Nothing matches that." Foreground="{DynamicResource MutedBrush}" Margin="2,4,0,0" Visibility="Collapsed"/>
+                    <ItemsControl x:Name="Rows">
                         <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><ui:GroupPackPanel Columns="3" MinColumnWidth="300" Gap="10" RowGap="18"/></ItemsPanelTemplate>
+                            <ItemsPanelTemplate><ui:AdaptiveGrid Columns="2" MinItemWidth="380" Gap="10" RowHeight="64"/></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
-
-                    <!-- Windows tools -->
-                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14"
-                            Padding="16,12,16,8" Margin="0,18,0,0">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0">
-                                    <TextBlock Text="&#xE71D;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="Windows tools" FontSize="14" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Jump straight to the tool you need" FontSize="11" Foreground="{DynamicResource FaintBrush}"/>
-                                </StackPanel>
-                            </Grid>
-                            <ItemsControl x:Name="WinTools" ItemTemplate="{StaticResource WinToolChip}">
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
+                    <TextBlock FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="2,14,0,0" TextWrapping="Wrap"
+                               Text="Every tool is Windows' own, run with its documented options. Nothing is downloaded."/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

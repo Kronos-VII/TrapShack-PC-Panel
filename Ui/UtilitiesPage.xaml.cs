@@ -24,6 +24,17 @@ public sealed class UtilVM : Notify
     public bool CanRun => OpensWindow || !_blocked;
 }
 
+/// <summary>A Windows tool shortcut, as a row.</summary>
+public sealed class WinToolVM
+{
+    public WinToolVM(WinTool t) { Tool = t; }
+    public WinTool Tool { get; }
+    public string Name => Tool.Name;
+    public string Glyph => Tool.Glyph;
+    public string Target => Tool.Target;
+    public string Sub => Tool.Target.StartsWith("ms-settings:") || Tool.Target.EndsWith(":") ? "Opens in Settings" : "Opens " + Tool.Target;
+}
+
 public sealed class UtilSectionVM : IPackCount
 {
     public int PackCount => Tools.Count;
@@ -74,13 +85,76 @@ public partial class UtilitiesPage : UserControl
             _all.AddRange(tools);
             if (tools.Count > 0) sections.Add(new UtilSectionVM { Name = name, Glyph = glyph, Blurb = blurb, Tools = tools });
         }
-        Cards.ItemsSource = sections;
-        WinTools.ItemsSource = UtilityCatalog.WindowsTools;
+        _sections = sections;
+        _winTools = UtilityCatalog.WindowsTools.Select(t => new WinToolVM(t)).ToList();
+        _key = sections.FirstOrDefault()?.Name ?? WinToolsKey;
+        Rebuild();
     }
+
+    // ------------------------------------------------------------------ categories on the left, tools on the right
+    const string WinToolsKey = "Windows tools";
+    List<UtilSectionVM> _sections = new();
+    List<WinToolVM> _winTools = new();
+    readonly List<RailVM> _rail = new();
+    string _key = "";
+    bool _building;
+
+    void Rebuild()
+    {
+        var q = Search.Text.Trim();
+        _rail.Clear();
+        foreach (var sct in _sections)
+            _rail.Add(new RailVM { Key = sct.Name, Title = sct.Name, Glyph = sct.Glyph, Count = sct.Tools.Count.ToString(), Selected = q.Length == 0 && sct.Name == _key });
+        _rail.Add(new RailVM { Key = WinToolsKey, Title = WinToolsKey, Glyph = "\uE71D", Count = _winTools.Count.ToString(), Selected = q.Length == 0 && _key == WinToolsKey });
+        _building = true; Rail.ItemsSource = null; Rail.ItemsSource = _rail; _building = false;
+
+        var rows = new List<object>();
+        if (q.Length > 0)
+        {
+            rows.AddRange(_all.Where(t => t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || t.Desc.Contains(q, StringComparison.OrdinalIgnoreCase)));
+            rows.AddRange(_winTools.Where(t => t.Name.Contains(q, StringComparison.OrdinalIgnoreCase)));
+            PaneGlyph.Text = "\uE721";
+            PaneTitle.Text = $"Results for \u201c{q}\u201d";
+            PaneDesc.Text = rows.Count == 0 ? "Nothing matches." : $"{rows.Count} tool{(rows.Count == 1 ? "" : "s")} found";
+        }
+        else if (_key == WinToolsKey)
+        {
+            rows.AddRange(_winTools);
+            PaneGlyph.Text = "\uE71D";
+            PaneTitle.Text = WinToolsKey;
+            PaneDesc.Text = "Jump straight to the Windows tool you need";
+        }
+        else
+        {
+            var sct = _sections.FirstOrDefault(x => x.Name == _key);
+            if (sct != null) { rows.AddRange(sct.Tools); PaneGlyph.Text = sct.Glyph; PaneTitle.Text = sct.Name; PaneDesc.Text = sct.Blurb; }
+        }
+        Rows.ItemsSource = rows;
+        NoMatch.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnRailChecked(object sender, RoutedEventArgs e)
+    {
+        if (_building || ((FrameworkElement)sender).DataContext is not RailVM r) return;
+        if (r.Key == _key && Search.Text.Length == 0) return;
+        _key = r.Key;
+        if (Search.Text.Length > 0) { Search.Text = ""; return; }
+        Rebuild();
+        Scroller.ScrollToTop();
+    }
+
+    void OnSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        SearchHint.Visibility = Search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        Rebuild();
+    }
+
+    public void FocusSearch() => Search.Focus();
 
     void OnOpenWinTool(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not WinTool t) return;
+        if (((FrameworkElement)sender).DataContext is not WinToolVM vm) return;
+        var t = vm.Tool;
         if (!CommandRunner.Open(t.Target, t.Args) && _host != null)
             Dialogs.Info(_host.Win, t.Name, "Windows couldn't open " + t.Name + " on this PC.");
     }

@@ -48,8 +48,9 @@
             <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushSoft}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="12,10,10,10"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Height" Value="64"/>
+            <Setter Property="Padding" Value="12,0,14,0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
@@ -65,21 +66,21 @@
         </Style>
 
         <DataTemplate DataType="{x:Type ui:WinAppVM}">
-            <Border Style="{StaticResource AppTile}" MouseLeftButtonUp="OnRowClick" ui:Fx.Glow="True" ui:Fx.Rise="True" ToolTip="{Binding Tip}">
+            <Border Style="{StaticResource AppTile}" MouseLeftButtonUp="OnRowClick" ui:Fx.Glow="True" ToolTip="{Binding Tip}">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="42" Height="42" CornerRadius="11" Background="{Binding TileBg}" Margin="0,0,11,0" VerticalAlignment="Center">
+                    <Border Width="40" Height="40" CornerRadius="10" Background="{Binding TileBg}" Margin="0,0,12,0" VerticalAlignment="Center">
                         <Grid>
-                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{Binding GlyphFg}"
+                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="19" Foreground="{Binding GlyphFg}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoPhoto}"/>
-                            <Image Source="{Binding Photo}" Width="30" Height="30" Visibility="{Binding HasPhoto}"
+                            <Image Source="{Binding Photo}" Width="28" Height="28" Visibility="{Binding HasPhoto}"
                                    RenderOptions.BitmapScalingMode="HighQuality"/>
-                            <Border Width="42" Height="42" CornerRadius="11" Background="{Binding Art.Tile}" Visibility="{Binding HasArt}">
+                            <Border Width="40" Height="40" CornerRadius="10" Background="{Binding Art.Tile}" Visibility="{Binding HasArt}">
                                 <Grid>
-                                    <Image Source="{Binding Art.Photo}" Visibility="{Binding Art.PhotoVisible}" Width="42" Height="42" RenderOptions.BitmapScalingMode="HighQuality"/>
-                                    <Viewbox Width="22" Height="22" Visibility="{Binding Art.IconVisible}">
+                                    <Image Source="{Binding Art.Photo}" Visibility="{Binding Art.PhotoVisible}" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <Viewbox Width="21" Height="21" Visibility="{Binding Art.IconVisible}">
                                         <Path Data="{Binding Art.Icon}" Fill="{Binding Art.Glyph}" Width="24" Height="24" Stretch="Uniform"/>
                                     </Viewbox>
                                     <TextBlock Text="{Binding Art.Mono}" Visibility="{Binding Art.MonoVisible}" Foreground="{Binding Art.Glyph}"
@@ -88,26 +89,25 @@
                             </Border>
                         </Grid>
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="{DynamicResource AmberBrush}" Margin="0,1,6,0"
                                        VerticalAlignment="Center" Visibility="{Binding HasWarning, Converter={StaticResource B2V}}"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                         </Grid>
-                        <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                   MaxHeight="30" LineHeight="15" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding Desc}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0" HorizontalAlignment="Right">
+                    <Border Grid.Column="2" Style="{StaticResource TagBox}" Padding="7,1.5" Margin="0,0,12,0" CornerRadius="5" BorderThickness="0"
+                            Visibility="{Binding ShowTag, Converter={StaticResource B2V}}">
+                        <TextBlock Text="{Binding ShortTag}" FontSize="10.5" Style="{StaticResource TagText}"/>
+                    </Border>
+                    <Grid Grid.Column="3" VerticalAlignment="Center" Width="22">
                         <CheckBox Style="{StaticResource TsCheck}" IsChecked="{Binding Selected, Mode=TwoWay}" IsEnabled="{Binding CanSelect}"
-                                  Visibility="{Binding Locked, Converter={StaticResource InvB2V}}" HorizontalAlignment="Right"/>
+                                  Visibility="{Binding Locked, Converter={StaticResource InvB2V}}"/>
                         <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource FaintBrush}"
-                                   Visibility="{Binding Locked, Converter={StaticResource B2V}}" HorizontalAlignment="Right"/>
-                        <Border Style="{StaticResource TagBox}" Margin="0,6,0,0" Padding="7,2" HorizontalAlignment="Right"
-                                Visibility="{Binding ShowTag, Converter={StaticResource B2V}}">
-                            <TextBlock Text="{Binding ShortTag}" FontSize="10.5" Style="{StaticResource TagText}"/>
-                        </Border>
-                    </StackPanel>
+                                   Visibility="{Binding Locked, Converter={StaticResource B2V}}" HorizontalAlignment="Center"/>
+                    </Grid>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -115,47 +115,80 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="34,4,34,10">
-            <TextBlock Text="DEBLOAT" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
-            <TextBlock Text="Debloat apps" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
-                       Text="The Windows apps found on this PC. Tick the ones you don't use. Locked apps are needed by Windows."/>
-        </StackPanel>
-
-        <Grid Grid.Row="1" Margin="34,0,34,10">
+        <!-- header: title left, search right -->
+        <Grid Grid.Row="0" Margin="34,4,34,20">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Grid>
-                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="{DynamicResource Ink_FF141418}"
-                         Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}" CaretBrush="{DynamicResource AccentHotBrush}"/>
-                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="SearchHint" Text="Search Windows apps   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
-            </Grid>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                <Border CornerRadius="10" Padding="10,3" Margin="0,0,10,0" VerticalAlignment="Center" Background="{DynamicResource Ink_FF1C1C22}" BorderBrush="{DynamicResource Ink_FF33333C}" BorderThickness="1">
-                    <TextBlock x:Name="StatFound" FontSize="11.5" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"/>
-                </Border>
-                <Button Content="Pick the safe ones" Style="{StaticResource GhostButton}" Click="OnPickSafe" Margin="0,0,8,0"
-                        ToolTip="Picks the apps that are safe for everyone to remove. Optional and core apps are left alone."/>
-                <Button Content="Clear" Style="{StaticResource GhostButton}" Click="OnClear"/>
+            <StackPanel VerticalAlignment="Bottom" Margin="0,0,20,0">
+                <TextBlock Text="DEBLOAT" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
+                <TextBlock Text="Debloat apps" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                           Text="The Windows apps found on this PC. Tick the ones you don't use. Apps Windows needs are locked."/>
             </StackPanel>
+            <Grid Grid.Column="1" Width="300" VerticalAlignment="Bottom">
+                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Height="40" Padding="36,0,12,0" VerticalContentAlignment="Center" FontSize="13"
+                         Background="{DynamicResource Ink_FF141418}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}"
+                         CaretBrush="{DynamicResource AccentHotBrush}"/>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SearchHint" Text="Search Windows apps   Ctrl+F" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
         </Grid>
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="34,0,34,16">
-                <TextBlock x:Name="Loading" Text="Looking at what's installed…" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0"/>
-                <TextBlock x:Name="Empty" Visibility="Collapsed" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0" TextWrapping="Wrap"/>
-                <ItemsControl x:Name="Tiles">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="190" Gap="10" RowHeight="76"/></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </StackPanel>
-        </ScrollViewer>
+        <Grid Grid.Row="1" Margin="34,0,20,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="248"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
-        <Border x:Name="PickBar" Grid.Row="3" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="{DynamicResource Ink_FF131317}" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" Visibility="Collapsed">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,0,24">
+                    <TextBlock Text="KINDS OF APPS" Style="{StaticResource RailLabel}"/>
+                    <ItemsControl x:Name="Rail">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Style="{StaticResource RailButton}" GroupName="winrail" IsChecked="{Binding Selected, Mode=OneWay}" Checked="OnRailChecked"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border BorderBrush="{DynamicResource Ink_FF1E1E25}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="12,14,8,0">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock Text="Found on this PC" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                <TextBlock x:Name="StatFound" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Ink_FFD7D7DE}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Button Style="{StaticResource MiniButton}" Content="Pick the safe ones" HorizontalAlignment="Left" Margin="-6,10,0,0" Click="OnPickSafe"
+                                    ToolTip="Picks the apps that are safe for everyone to remove. Core, optional and warned apps are left alone."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="Scroller" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,14,24">
+                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="12" Padding="18,14" Margin="0,0,0,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="PaneGlyph" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="PaneTitle" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="PaneDesc" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <TextBlock x:Name="Loading" Text="Looking at what's installed…" Foreground="{DynamicResource MutedBrush}" Margin="2,4,0,0"/>
+                    <TextBlock x:Name="Empty" Visibility="Collapsed" Foreground="{DynamicResource MutedBrush}" Margin="2,4,0,0" TextWrapping="Wrap"/>
+                    <ItemsControl x:Name="Tiles">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><ui:AdaptiveGrid Columns="2" MinItemWidth="380" Gap="10" RowHeight="64"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Border x:Name="PickBar" Grid.Row="2" Margin="34,6,34,14" Padding="18,11" CornerRadius="12" Background="{DynamicResource Ink_FF131317}" BorderBrush="{DynamicResource AccentPanelBorderBrush}" BorderThickness="1" Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">

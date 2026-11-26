@@ -22,10 +22,11 @@ public sealed class StartupVM : Notify
     public bool Enabled => E.Enabled;
     bool _busy;
     public bool NotBusy { get => !_busy; set { _busy = !value; Raise(); } }
-    public void Refresh() { Raise(nameof(Enabled)); Raise(nameof(Impact)); Raise(nameof(ImpactLevel)); }
+    public void Refresh() { Raise(nameof(Enabled)); Raise(nameof(Impact)); Raise(nameof(ImpactLevel)); Raise(nameof(ImpactShort)); }
 
     public string Impact => E.DelayMs <= 0 ? (E.Enabled ? "No startup delay recorded" : "Off: doesn't start with Windows")
         : $"Slowed startup by {(E.DelayMs >= 1000 ? $"{E.DelayMs / 1000.0:0.#} s" : $"{E.DelayMs} ms")}";
+    public string ImpactShort => E.DelayMs <= 0 ? "" : $"+{(E.DelayMs >= 1000 ? $"{E.DelayMs / 1000.0:0.#} s" : $"{E.DelayMs} ms")} at startup";
     public string ImpactLevel => E.DelayMs >= 1500 ? "high" : E.DelayMs >= 400 ? "medium" : E.DelayMs > 0 ? "low" : "none";
 }
 
@@ -49,7 +50,7 @@ public partial class StartupPage : UserControl
         {
             var (items, boot) = await Task.Run(() => (StartupApps.Read(), StartupApps.LastBootTime()));
             _all = items.Select(e => new StartupVM(e)).ToList();
-            _bootText = boot is TimeSpan t ? $"Last startup: {t.TotalSeconds:0.#} s" : "";
+            _bootText = boot is TimeSpan t ? $"{t.TotalSeconds:0.#} s" : "not recorded";
             Refresh();
             // icons come in the background
             foreach (var vm in _all.ToList())
@@ -62,22 +63,64 @@ public partial class StartupPage : UserControl
         finally { _loading = false; Loading.Visibility = Visibility.Collapsed; }
     }
 
+    // ------------------------------------------------------------------ what to show (the list on the left)
+    static readonly (string Key, string Glyph, string Desc)[] Views =
+    {
+        ("All programs", "\uE7E8", "Everything that opens when Windows starts, slowest first"),
+        ("Slow to start", "\uEC4A", "Programs Windows measured slowing your startup down"),
+        ("Switched on", "\uE73E", "Programs that open with Windows right now"),
+        ("Switched off", "\uE711", "Programs you've stopped from opening with Windows"),
+    };
+    string _view = "All programs";
+    readonly List<RailVM> _rail = new();
+    bool _building;
+
+    static bool In(string view, StartupVM v) => view switch
+    {
+        "Slow to start" => v.E.DelayMs >= 400,
+        "Switched on" => v.E.Enabled,
+        "Switched off" => !v.E.Enabled,
+        _ => true,
+    };
+
+    void OnRailChecked(object sender, RoutedEventArgs e)
+    {
+        if (_building || ((FrameworkElement)sender).DataContext is not RailVM r) return;
+        if (r.Key == _view && Search.Text.Length == 0) return;
+        _view = r.Key;
+        if (Search.Text.Length > 0) { Search.Text = ""; return; }
+        Refresh();
+        Scroller.ScrollToTop();
+    }
+
     void Refresh()
     {
         var q = Search.Text.Trim();
-        var shown = _all.Where(v => q.Length == 0 || v.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || v.Sub.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        _rail.Clear();
+        foreach (var v in Views)
+            _rail.Add(new RailVM { Key = v.Key, Title = v.Key, Glyph = v.Glyph, Count = _all.Count(x => In(v.Key, x)).ToString(), Selected = q.Length == 0 && v.Key == _view });
+        _building = true; Rail.ItemsSource = null; Rail.ItemsSource = _rail; _building = false;
+
+        var shown = _all.Where(v => q.Length > 0
+                ? v.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || v.Sub.Contains(q, StringComparison.OrdinalIgnoreCase)
+                : In(_view, v))
+            .OrderByDescending(v => v.E.DelayMs).ThenByDescending(v => v.E.Enabled).ThenBy(v => v.Name, StringComparer.OrdinalIgnoreCase).ToList();
         Tiles.ItemsSource = shown;
+        var view = Views.First(x => x.Key == _view);
+        PaneGlyph.Text = q.Length > 0 ? "\uE721" : view.Glyph;
+        PaneTitle.Text = q.Length > 0 ? $"Results for \u201c{q}\u201d" : view.Key;
+        PaneDesc.Text = q.Length > 0 ? $"{shown.Count} program{(shown.Count == 1 ? "" : "s")} found" : view.Desc;
         Empty.Visibility = shown.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        Empty.Text = q.Length > 0 ? "Nothing matches that." : "Nothing starts with Windows on this PC.";
+        Empty.Text = q.Length > 0 ? "Nothing matches that." : _all.Count == 0 ? "Nothing starts with Windows on this PC." : "Nothing here.";
         UpdateChips();
     }
 
     void UpdateChips()
     {
         var on = _all.Count(v => v.E.Enabled);
-        var chips = new List<string> { $"{on} on", $"{_all.Count - on} off" };
-        if (_bootText.Length > 0) chips.Add(_bootText);
-        Chips.ItemsSource = chips;
+        StatBoot.Text = _bootText;
+        StatOn.Text = $"{on} of {_all.Count}";
+        foreach (var r in _rail) r.Count = _all.Count(x => In(r.Key, x)).ToString();
     }
 
     void OnSearchChanged(object sender, TextChangedEventArgs e)

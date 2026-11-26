@@ -273,9 +273,46 @@ public partial class MainWindow : Window, IPageHost
     void SelectNav(string key)
     {
         if (_navByKey.TryGetValue(key, out var rb)) { rb.IsChecked = true; return; }
+        // an Optimizations area: open the Optimizations page on it
+        if (PageDefs.All.Any(p => p.Key == key && p.Section == PageDefs.Optimizations))
+        {
+            if (_navByKey["hub"].IsChecked == true) { ShowTweakPage(PageDefs.OptimizationsPage, key); return; }
+            _pendingArea = key; _navByKey["hub"].IsChecked = true; return;
+        }
         // An Optimizations area page: keep "Optimizations" highlighted and open the page directly.
         _loaded = false; _navByKey["hub"].IsChecked = true; _loaded = true;
         Navigate(key);
+    }
+
+    // ---- Settings: sections on the left, the chosen one on the right ----
+    static readonly (string Key, string Glyph, string Desc)[] SettingsSections =
+    {
+        ("Appearance", "\uE771", "Accent colour, light or dark, and the animated effects"),
+        ("Profiles", "\uE8F1", "Save the settings you use and load them on another PC"),
+        ("Safety", "\uEA18", "Restore points and the questions TrapShack asks first"),
+        ("Updates", "\uE895", "Keep TrapShack up to date"),
+    };
+    string _setSection = "Appearance";
+    bool _setBuilding;
+
+    void ShowSettingsSection(string key)
+    {
+        _setSection = key;
+        var rail = SettingsSections.Select(x => new RailVM { Key = x.Key, Title = x.Key, Glyph = x.Glyph, Selected = x.Key == key }).ToList();
+        _setBuilding = true; SettingsRail.ItemsSource = rail; _setBuilding = false;
+        var sec = SettingsSections.First(x => x.Key == key);
+        SetGlyph.Text = sec.Glyph; SetTitle.Text = sec.Key; SetDesc.Text = sec.Desc;
+        SetAppearance.Visibility = key == "Appearance" ? Visibility.Visible : Visibility.Collapsed;
+        SetProfiles.Visibility = key == "Profiles" ? Visibility.Visible : Visibility.Collapsed;
+        SetSafety.Visibility = key == "Safety" ? Visibility.Visible : Visibility.Collapsed;
+        SetUpdates.Visibility = key == "Updates" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsScroll.ScrollToTop();
+    }
+
+    void OnSettingsRail(object sender, RoutedEventArgs e)
+    {
+        if (_setBuilding || ((FrameworkElement)sender).DataContext is not RailVM r || r.Key == _setSection) return;
+        ShowSettingsSection(r.Key);
     }
 
     void OnHomeJump(object sender, RoutedEventArgs e)
@@ -307,7 +344,7 @@ public partial class MainWindow : Window, IPageHost
             case "home": ShowPanel(HomePanel); RefreshHome(); break;
             case "system": ShowSystem(); break;
             case "temps": ShowPanel(MonitorPanel); MonitorPanel.Show(); break;
-            case "settings": ShowPanel(SettingsPanel); BuildSwatches(); ShowRestorePointSetting(); ShowUpdateSetting(); break;
+            case "settings": ShowPanel(SettingsPanel); BuildSwatches(); ShowRestorePointSetting(); ShowUpdateSetting(); ShowSettingsSection(_setSection); break;
             case "apps": ShowPanel(AppsPanel); _ = AppsPanel.ScanAsync(); break;
             case "winapps": ShowPanel(DebloatAppsPanel); _ = DebloatAppsPanel.LoadAsync(); break;
             case "cleaner": ShowPanel(CleanerPanel); _ = CleanerPanel.LoadAsync(); break;
@@ -315,24 +352,27 @@ public partial class MainWindow : Window, IPageHost
             case "startup": ShowPanel(StartupPanel); _ = StartupPanel.LoadAsync(); break;
             case "restore": ShowPanel(RestorePanel); _ = RestorePanel.LoadAsync(); break;
             case "search": ShowPanel(SearchPanel); SearchAllBox.Focus(); RunGlobalSearch(); break;
-            case "hub":
-                _hub = true;
-                _hubSection = PageDefs.Optimizations;
-                ShowPanel(HubPanel); RefreshHub(); break;
-            default: ShowTweakPage(PageDefs.Get(key)); break;
+            case "hub": ShowTweakPage(PageDefs.OptimizationsPage, _pendingArea); _pendingArea = null; break;
+            default:
+                var pd = PageDefs.Get(key);
+                if (pd.Section == PageDefs.Optimizations) ShowTweakPage(PageDefs.OptimizationsPage, key);
+                else ShowTweakPage(pd);
+                break;
         }
     }
 
-    void ShowTweakPage(PageDef page)
+    string? _pendingArea;
+
+    void ShowTweakPage(PageDef page, string? startAt = null)
     {
         _page = page;
         ShowPanel(TweakPanel);
-        var area = page.Section == PageDefs.Optimizations;
+        var area = page.Section == PageDefs.Optimizations && page.Key != PageDefs.OptimizationsPage.Key;
         PageCrumb.Text = area ? "\u2039  Optimizations" : page.Section.ToUpperInvariant();
         PageCrumb.Cursor = area ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
         PageTitle.Text = page.Title;
         PageSubtitle.Text = page.Subtitle;
-        _cat = null;
+        _cat = startAt;
         SearchBox.Text = "";
         TweakScroll.ScrollToTop();
 
@@ -382,6 +422,7 @@ public partial class MainWindow : Window, IPageHost
         public string Title { get; init; } = "";
         public string Glyph { get; init; } = "";
         public List<TweakVM> Items { get; init; } = new();
+        public string? Desc { get; init; }
         bool _sel; string _count = "";
         public bool Selected { get => _sel; set => Set(ref _sel, value); }
         public string CountText { get => _count; private set => Set(ref _count, value); }
@@ -400,9 +441,22 @@ public partial class MainWindow : Window, IPageHost
     List<RailItem> BuildRail(string key, List<TweakVM> pageItems)
     {
         var list = new List<RailItem>();
+        if (key == PageDefs.OptimizationsPage.Key)
+        {
+            foreach (var area in PageDefs.AreaOrder.Concat(PageDefs.All.Where(p => p.Section == PageDefs.Optimizations).Select(p => p.Key)).Distinct())
+            {
+                var items = pageItems.Where(v => v.PageKey == area).ToList();
+                if (items.Count == 0) continue;
+                var pd = PageDefs.Get(area);
+                list.Add(new RailItem { Key = area, Title = pd.Title, Glyph = pd.Glyph, Items = items, Desc = pd.Subtitle });
+            }
+            foreach (var r in list) r.Refresh();
+            return list;
+        }
         if (key == "debloat")
         {
-            foreach (var (section, glyph, _) in Catalog.DebloatLayout)
+            var layout = Catalog.DebloatLayout.OrderBy(l => { var i = Array.IndexOf(DebloatOrder, l.Section); return i >= 0 ? i : 50; }).ToList();
+            foreach (var (section, glyph, _) in layout)
             {
                 var items = pageItems.Where(v => v.Group == section).ToList();
                 if (items.Count > 0) list.Add(new RailItem { Key = section, Title = section, Glyph = glyph, Items = items });
@@ -435,12 +489,42 @@ public partial class MainWindow : Window, IPageHost
         return rows;
     }
 
+    bool IsOptimizations => _page?.Key == PageDefs.OptimizationsPage.Key;
+
+    /// <summary>The settings a page holds (the Optimizations page holds every Optimizations area).</summary>
+    List<TweakVM> PageItems(PageDef page) => page.Key == PageDefs.OptimizationsPage.Key
+        ? _vms.Where(v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations).ToList()
+        : _vms.Where(v => v.PageKey == page.Key).ToList();
+
+    /// <summary>One block of rows in the right-hand pane, with an optional small heading.</summary>
+    public sealed record PaneGroup(string Title, string Count, bool ShowTitle, List<object> Rows);
+
+    // Debloat categories, gaming first; Windows AI and Windows Update last.
+    static readonly string[] DebloatOrder =
+    {
+        "Gaming", "System", "Privacy & suggested content", "Start menu & search", "Taskbar", "File Explorer", "Appearance",
+        "Multitasking", "Browsers & apps", "Network", "Clean up", "Windows AI", "Windows Update",
+    };
+
+    /// <summary>Order of the groups inside an Optimizations area: gaming and performance first, AI, services and updates last.</summary>
+    static int GroupRank(string name)
+    {
+        var n = " " + name.ToLowerInvariant() + " ";
+        if (n.Contains("gam") || n.Contains("graphic") || n.Contains("gpu")) return 0;
+        if (n.Contains("performance") || n == " system ") return 1;
+        if (n.Contains("visual") || n.Contains("display")) return 2;
+        if (n.Contains(" ai ") || n.Contains("copilot") || n.Contains("recall")) return 8;
+        if (n.Contains("update")) return 9;
+        if (n.Contains("service") || n.Contains("scheduled") || n.Contains("task")) return 7;
+        return 5;
+    }
+
     void ApplyPageView()
     {
         if (_page == null || _vms == null) return;
         var q = SearchBox.Text.Trim();
         var key = _page.Key;
-        var pageItems = _vms.Where(v => v.PageKey == key).ToList();
+        var pageItems = PageItems(_page);
         _searching = q.Length > 0;
         QuickBtnText.Text = key == "debloat" ? "Quick select" : "Quick actions";
 
@@ -455,10 +539,31 @@ public partial class MainWindow : Window, IPageHost
             (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || (t.T.ChoiceGroup ?? "").Contains(q, StringComparison.OrdinalIgnoreCase);
 
         // searching looks through every category of the page; otherwise only the chosen one shows
-        _rows = _searching
-            ? _rail.SelectMany(r => BuildRows(r.Items, Hit, q)).ToList()
-            : BuildRows(_rail.FirstOrDefault(r => r.Key == _cat)?.Items ?? new List<TweakVM>(), _ => true, "");
-        TweakList.ItemsSource = _rows;
+        var groups = new List<PaneGroup>();
+        if (_searching)
+        {
+            foreach (var r in _rail)
+            {
+                var rows = BuildRows(r.Items, Hit, q);
+                if (rows.Count > 0) groups.Add(new PaneGroup(r.Title, rows.Count.ToString(), true, rows));
+            }
+        }
+        else if (_rail.FirstOrDefault(r => r.Key == _cat) is RailItem cat)
+        {
+            if (IsOptimizations)
+            {
+                // an area: its groups, gaming and performance first, each with a small heading
+                var names = cat.Items.Select(v => v.Group).Distinct().Select((g, i) => (g, i)).OrderBy(x => GroupRank(x.g)).ThenBy(x => x.i).Select(x => x.g).ToList();
+                foreach (var g in names)
+                {
+                    var rows = BuildRows(cat.Items.Where(v => v.Group == g), _ => true, "");
+                    if (rows.Count > 0) groups.Add(new PaneGroup(g, rows.Count.ToString(), names.Count > 1, rows));
+                }
+            }
+            else groups.Add(new PaneGroup(cat.Title, "", false, BuildRows(cat.Items, _ => true, "")));
+        }
+        _rows = groups.SelectMany(g => g.Rows).ToList();
+        TweakList.ItemsSource = groups;
         PanelEmpty.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateCategoryHeader();
     }
@@ -484,8 +589,8 @@ public partial class MainWindow : Window, IPageHost
         var recAll = cat.Items.Count(v => v.V.Fit == Fit.Recommended && !v.T.OneShot);
         CatGlyph.Text = cat.Glyph;
         CatTitle.Text = cat.Title;
-        CatDesc.Text = $"{cat.Items.Count} setting{(cat.Items.Count == 1 ? "" : "s")}" +
-                       (recAll > 0 ? $"  ·  {recAll} recommended for this PC" : "  ·  nothing here is switched on automatically");
+        CatDesc.Text = cat.Desc ?? ($"{cat.Items.Count} setting{(cat.Items.Count == 1 ? "" : "s")}" +
+                       (recAll > 0 ? $"  ·  {recAll} recommended for this PC" : "  ·  nothing here is switched on automatically"));
         CatProgress.Visibility = sw.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         var on = sw.Count(v => v.IsOn);
         CatCount.Inlines.Clear();
@@ -511,7 +616,8 @@ public partial class MainWindow : Window, IPageHost
     {
         if (_page == null || _cat == null) return;
         var key = _page.Key; var cat = _cat;
-        await ApplyRecommendedAsync(v => v.PageKey == key && v.Group == cat);
+        if (IsOptimizations) await ApplyRecommendedAsync(v => v.PageKey == cat);
+        else await ApplyRecommendedAsync(v => v.PageKey == key && v.Group == cat);
     }
 
     /// <summary>After any change: the counts in the category list, the drop-downs and the header follow.</summary>
@@ -557,6 +663,7 @@ public partial class MainWindow : Window, IPageHost
         if (DebloatAppsPanel.Visibility == Visibility.Visible) { DebloatAppsPanel.FocusSearch(); e.Handled = true; return; }
         if (CleanerPanel.Visibility == Visibility.Visible) { CleanerPanel.FocusSearch(); e.Handled = true; return; }
         if (StartupPanel.Visibility == Visibility.Visible) { StartupPanel.FocusSearch(); e.Handled = true; return; }
+        if (UtilitiesPanel.Visibility == Visibility.Visible) { UtilitiesPanel.FocusSearch(); e.Handled = true; return; }
         TextBox? box = TweakPanel.Visibility == Visibility.Visible ? SearchBox
                      : SearchPanel.Visibility == Visibility.Visible ? SearchAllBox : null;
         if (box == null) return;
@@ -606,7 +713,7 @@ public partial class MainWindow : Window, IPageHost
     void UpdatePageProgress()
     {
         if (_page == null) return;
-        var items = _vms.Where(v => v.PageKey == _page.Key).ToList();
+        var items = PageItems(_page);
         var st = Stats(items);
 
         StatRec.Text = st.RecTotal > 0 ? $"{st.RecDone} of {st.RecTotal}" : "none here";
@@ -847,7 +954,11 @@ public partial class MainWindow : Window, IPageHost
     /// <summary>What "this page" means for the Quick actions menu: one page, or every optimization page on the hub.</summary>
     Func<TweakVM, bool>? CurrentScope()
     {
-        if (_page != null) { var key = _page.Key; return v => v.PageKey == key; }
+        if (_page != null)
+        {
+            if (IsOptimizations) return v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations;
+            var key = _page.Key; return v => v.PageKey == key;
+        }
         if (_hub)
         {
             var section = _hubSection;

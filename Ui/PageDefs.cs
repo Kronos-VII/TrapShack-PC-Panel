@@ -29,7 +29,14 @@ public static class PageDefs
         new("customize", "Customization", "Look and feel: sounds, notification extras, lock screen and accessibility shortcuts.", "\uE771", Optimizations),
     };
 
-    public static PageDef Get(string key) => All.First(p => p.Key == key);
+    /// <summary>Every Optimizations area on one page: the areas are listed on the left, gaming first, updates last.</summary>
+    public static readonly PageDef OptimizationsPage = new("optimizations", "Optimizations",
+        "Every optimization in one place. Pick an area on the left; the settings picked for this PC are marked Recommended.", "\uE945", Optimizations);
+
+    /// <summary>The order of the areas in that list.</summary>
+    public static readonly string[] AreaOrder = { "gaming", "privacy", "power", "sound", "notifications", "customize", "updates" };
+
+    public static PageDef Get(string key) => key == OptimizationsPage.Key ? OptimizationsPage : All.First(p => p.Key == key);
 
     static readonly HashSet<string> DebloatSections = TrapShack.Tweaks.Catalog.DebloatLayout.Select(x => x.Section).ToHashSet();
 

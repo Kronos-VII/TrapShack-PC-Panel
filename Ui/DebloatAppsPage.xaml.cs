@@ -123,12 +123,58 @@ public partial class DebloatAppsPage : UserControl
         _building = false; UpdateStats();
     }
 
+    // ------------------------------------------------------------------ kinds of apps (the list on the left)
+    static readonly (string Key, string Glyph, string Desc)[] Kinds =
+    {
+        ("All apps", "\uE71D", "Every removable app found on this PC"),
+        ("Gaming & Xbox", "\uE7FC", "Xbox, Game Bar and games. Removing some of these stops Game Pass or game capture"),
+        ("Windows & Microsoft apps", "\uE770", "Apps that came with Windows. Most can be reinstalled from the Microsoft Store"),
+        ("Third-party apps", "\uE719", "Games and apps installed by Microsoft or your PC maker as promotions"),
+        ("PC maker apps", "\uE7F8", "Your PC maker's tools. They can handle drivers, fans or battery: read each one first"),
+        ("AI & Copilot", "\uE99A", "Copilot and Windows AI pieces. Some can't be reinstalled once removed"),
+        ("Required by Windows", "\uE72E", "Windows and other apps need these, so they are locked"),
+    };
+
+    static string KindOf(WinAppDef d) =>
+        d.Tier == RemoveTier.Protected ? "Required by Windows" :
+        d.Group == "AI" || d.Name.Contains("Copilot", StringComparison.OrdinalIgnoreCase) ? "AI & Copilot" :
+        d.Group == "Games" || d.Appx.Contains("Xbox", StringComparison.OrdinalIgnoreCase) || d.Appx.Contains("GamingApp", StringComparison.OrdinalIgnoreCase) ? "Gaming & Xbox" :
+        d.Group == "Third-party apps" ? "Third-party apps" :
+        d.Group == "PC maker apps" ? "PC maker apps" : "Windows & Microsoft apps";
+
+    string _kind = "All apps";
+    readonly List<RailVM> _rail = new();
+
+    void OnRailChecked(object sender, RoutedEventArgs e)
+    {
+        if (_building || ((FrameworkElement)sender).DataContext is not RailVM r) return;
+        if (r.Key == _kind && Search.Text.Length == 0) return;
+        _kind = r.Key;
+        if (Search.Text.Length > 0) { Search.Text = ""; return; }
+        Refresh();
+        Scroller.ScrollToTop();
+    }
+
     void Refresh()
     {
         var q = Search.Text.Trim();
-        var tiles = _all.Where(a => !a.Removed && a.Matches(q))
+        var live = _all.Where(a => !a.Removed).ToList();
+        // the list on the left: only the kinds this PC has, each with how many were found
+        var kinds = Kinds.Where(k => k.Key == "All apps" || live.Any(a => KindOf(a.Def) == k.Key)).ToList();
+        if (kinds.All(k => k.Key != _kind)) _kind = "All apps";
+        _rail.Clear();
+        foreach (var k in kinds)
+            _rail.Add(new RailVM { Key = k.Key, Title = k.Key, Glyph = k.Glyph, Count = (k.Key == "All apps" ? live.Count : live.Count(a => KindOf(a.Def) == k.Key)).ToString(),
+                                   Selected = q.Length == 0 && k.Key == _kind });
+        _building = true; Rail.ItemsSource = null; Rail.ItemsSource = _rail; _building = false;
+
+        var tiles = live.Where(a => a.Matches(q) && (q.Length > 0 || _kind == "All apps" || KindOf(a.Def) == _kind))
             .OrderBy(a => a.Def.Tier == RemoveTier.Protected ? 1 : 0).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         Tiles.ItemsSource = tiles;
+        var kind = Kinds.First(k => k.Key == _kind);
+        PaneGlyph.Text = q.Length > 0 ? "\uE721" : kind.Glyph;
+        PaneTitle.Text = q.Length > 0 ? $"Results for \u201c{q}\u201d" : kind.Key;
+        PaneDesc.Text = q.Length > 0 ? $"{tiles.Count} app{(tiles.Count == 1 ? "" : "s")} found" : kind.Desc;
         Empty.Visibility = tiles.Count == 0 && _loaded ? Visibility.Visible : Visibility.Collapsed;
         Empty.Text = q.Length > 0 ? "Nothing matches that." : "None of the apps on this list are installed on this PC. Nothing to remove.";
         UpdateStats();
@@ -139,7 +185,7 @@ public partial class DebloatAppsPage : UserControl
     void UpdateStats()
     {
         var live = _all.Where(a => !a.Removed).ToList();
-        StatFound.Text = _loaded ? $"{live.Count} found" : "Checking…";
+        StatFound.Text = _loaded ? $"{live.Count} apps" : "Checking…";
         var p = Picked;
         PickBar.Visibility = p.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PickText.Text = $"{p.Count} app{(p.Count == 1 ? "" : "s")} picked";

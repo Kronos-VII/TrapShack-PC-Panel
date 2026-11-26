@@ -7,13 +7,16 @@ using TrapShack.Core;
 
 namespace TrapShack.Ui;
 
+/// <summary>One entry in a page's category list (the same list style on every page).</summary>
 public sealed class RailVM : Notify
 {
     bool _sel;
     public string Key { get; init; } = "";
     public string Title { get; init; } = "";
+    public string Glyph { get; init; } = "\uE71D";
     string _count = "";
-    public string Count { get => _count; set => Set(ref _count, value); }
+    public string Count { get => _count; set { if (Set(ref _count, value)) Raise(nameof(CountText)); } }
+    public string CountText => _count;
     public bool Selected { get => _sel; set => Set(ref _sel, value); }
 }
 
@@ -29,7 +32,14 @@ public partial class AppsPage : UserControl
     readonly List<AppCardVM> _apps = new();
     readonly List<PairCardVM> _pairs = new();
     readonly List<RailVM> _rail = new();
-    string _group = "";
+    string _group = "Game launchers";
+
+    static string GlyphOf(string group) => group switch
+    {
+        "Game launchers" => "\uE7FC", "Gaming tools" => "\uE945", "Runtimes & dependencies" => "\uE943", "Communication" => "\uE8BD",
+        "Browsers" => "\uE774", "Media" => "\uE8D6", "Utilities" => "\uE90F", "Creative & documents" => "\uE70F", "Development" => "\uE943",
+        _ => "\uE71D",
+    };
     bool _building, _scanning, _working;
     DateTime _lastScan = DateTime.MinValue;
 
@@ -53,7 +63,6 @@ public partial class AppsPage : UserControl
             var a86 = _apps.FirstOrDefault(a => a.Id == a64.Id[..^4] + "-x86");
             if (a86 != null) _pairs.Add(new PairCardVM(a64, a86));
         }
-        Rail.ItemsSource = null;
     }
 
     public void Init(IPageHost host)
@@ -131,7 +140,7 @@ public partial class AppsPage : UserControl
     }
 
     /// <summary>The small amber chip: picks every game runtime that is missing.</summary>
-    void OnRuntimeChipClick(object sender, MouseButtonEventArgs e) => Pick(a => a.Def.Dep && a.Def.Game);
+    void OnRuntimeChipClick(object sender, RoutedEventArgs e) => Pick(a => a.Def.Dep && a.Def.Game);
 
     void Pick(Func<AppCardVM, bool> which)
     {
@@ -164,9 +173,11 @@ public partial class AppsPage : UserControl
     void OnRailChecked(object sender, RoutedEventArgs e)
     {
         if (_building || ((FrameworkElement)sender).DataContext is not RailVM r) return;
+        if (r.Key == _group && Search.Text.Length == 0) return;
         _group = r.Key;
-        foreach (var x in _rail) x.Selected = ReferenceEquals(x, r);
+        if (Search.Text.Length > 0) { Search.Text = ""; return; }   // clearing the search rebuilds
         Rebuild(false);
+        Scroller.ScrollToTop();
     }
 
     void Rebuild(bool rail = true)
@@ -179,17 +190,19 @@ public partial class AppsPage : UserControl
         if (rail || _rail.Count == 0)
         {
             _rail.Clear();
-            int Cards(string g) => _apps.Count(a => a.Group == g && !pairIds.Contains(a.Id)) + _pairs.Count(p => p.X64.Group == g);
-            _rail.Add(new RailVM { Key = "", Title = "All apps", Count = GroupOrder.Sum(Cards).ToString(), Selected = _group == "" });
             foreach (var g in GroupOrder)
-                if (_apps.Any(a => a.Group == g)) _rail.Add(new RailVM { Key = g, Title = g, Count = Cards(g).ToString(), Selected = _group == g });
+                if (_apps.Any(a => a.Group == g)) _rail.Add(new RailVM { Key = g, Title = g, Glyph = GlyphOf(g) });
+            _rail.Add(new RailVM { Key = "", Title = "All apps", Glyph = "\uE71D" });
+            UpdateRailCounts();
             _building = true; Rail.ItemsSource = null; Rail.ItemsSource = _rail; _building = false;
         }
+        var searching = q.Length > 0;
+        foreach (var r in _rail) r.Selected = !searching && r.Key == _group;
 
         var sections = new List<AppSectionVM>();
         foreach (var g in GroupOrder)
         {
-            if (_group != "" && _group != g) continue;
+            if (!searching && _group != "" && _group != g) continue;
             var items = new List<object>();
             var members = _apps.Where(a => a.Group == g).ToList();
             foreach (var a in members)
@@ -203,16 +216,64 @@ public partial class AppsPage : UserControl
                 if (a.Matches(q)) items.Add(a);
             }
             if (items.Count == 0) continue;
-            sections.Add(new AppSectionVM { Title = g.ToUpperInvariant(), Items = items, Total = members.Count });
+            sections.Add(new AppSectionVM { Title = g, Items = items, Total = members.Count, ShowTitle = searching || _group == "" });
         }
         Sections.ItemsSource = sections;
         NoMatch.Visibility = sections.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePaneHeader();
         UpdateSectionCounters();
         UpdateStats();
     }
 
+    /// <summary>"installed / total" beside each category in the list.</summary>
+    void UpdateRailCounts()
+    {
+        foreach (var r in _rail)
+        {
+            var apps = _apps.Where(a => r.Key == "" || a.Group == r.Key).ToList();
+            r.Count = Scanned ? $"{apps.Count(a => a.Installed)}/{apps.Count}" : apps.Count.ToString();
+        }
+    }
+
+    /// <summary>The card above the list: the category, what it holds, and how much of it is installed.</summary>
+    void UpdatePaneHeader()
+    {
+        var q = Search.Text.Trim();
+        if (q.Length > 0)
+        {
+            PaneGlyph.Text = "\uE721";
+            PaneTitle.Text = $"Results for \u201c{q}\u201d";
+            var n = (Sections.ItemsSource as List<AppSectionVM>)?.Sum(x => x.Items.Count) ?? 0;
+            PaneDesc.Text = n == 0 ? "Nothing matches." : $"{n} app{(n == 1 ? "" : "s")} found in every category";
+            PaneProgress.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var apps = _apps.Where(a => _group == "" || a.Group == _group).ToList();
+        PaneGlyph.Text = GlyphOf(_group);
+        PaneTitle.Text = _group == "" ? "All apps" : _group;
+        PaneDesc.Text = _group switch
+        {
+            "Game launchers" => "Stores and launchers for your games",
+            "Gaming tools" => "Benchmarks, monitoring, drivers and overlays",
+            "Runtimes & dependencies" => "What games and programs need to start. Missing ones cause \u201cmissing .dll\u201d errors",
+            "Communication" => "Chat, voice and video calls",
+            "Browsers" => "Web browsers",
+            "Media" => "Music, video and recording",
+            "Utilities" => "Everyday tools for files, screenshots and remote help",
+            "Creative & documents" => "Photo, 3D and office apps",
+            "Development" => "Code editors and developer tools",
+            _ => "Every app TrapShack can install, by category",
+        };
+        PaneProgress.Visibility = Scanned ? Visibility.Visible : Visibility.Collapsed;
+        var inst = apps.Count(a => a.Installed);
+        PaneCount.Text = $"{inst} of {apps.Count} installed";
+        PaneBar.Value = apps.Count == 0 ? 0 : (double)inst / apps.Count;
+    }
+
     void UpdateSectionCounters()
     {
+        UpdateRailCounts();
+        if (Sections.ItemsSource is List<AppSectionVM> && Search.Text.Trim().Length == 0) UpdatePaneHeader();
         if (Sections.ItemsSource is not List<AppSectionVM> list) return;
         foreach (var s in list)
         {
@@ -225,11 +286,11 @@ public partial class AppsPage : UserControl
     void UpdateStats()
     {
         var installed = _apps.Count(a => a.Installed);
-        StatInstalled.Text = Scanned ? $"{installed} of {_apps.Count} installed" : "Checking…";
+        StatInstalled.Text = Scanned ? $"{installed} of {_apps.Count}" : "Checking…";
         var picked = Picked.Count;
         var missing = MissingGameRuntimes;
         RuntimeChip.Visibility = Scanned && missing > 0 ? Visibility.Visible : Visibility.Collapsed;
-        RuntimeChipText.Text = $"{missing} runtime{(missing == 1 ? "" : "s")} missing · pick";
+        RuntimeChipText.Text = $"Pick {missing} missing game runtime{(missing == 1 ? "" : "s")}";
         RuntimeChip.ToolTip = "Games commonly need these. Missing ones can cause “missing .dll” errors. Click to tick them.";
 
         var failed = Picked.Count(a => a.Failed);

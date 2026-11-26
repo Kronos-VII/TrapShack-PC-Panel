@@ -22,6 +22,8 @@ public sealed class RestoreVM : Notify
                  : $"{(int)d.TotalDays} day{((int)d.TotalDays == 1 ? "" : "s")} ago";
         }
     }
+    public string Sub => string.IsNullOrEmpty(When) ? Kind : $"{Kind}  ·  {When}";
+    public bool ByTrapShack => Description.Contains("TrapShack", StringComparison.OrdinalIgnoreCase);
     bool _busy;
     public bool NotBusy { get => !_busy; set { _busy = !value; Raise(); } }
 }
@@ -33,16 +35,52 @@ public partial class RestorePage : UserControl
     bool _working;
 
     public RestorePage() { InitializeComponent(); }
+
+    // ------------------------------------------------------------------ what to show (the list on the left)
+    static readonly (string Key, string Glyph)[] Views = { ("All restore points", "\uE81C"), ("Made by TrapShack", "\uE945"), ("Made by Windows", "\uE770") };
+    string _view = "All restore points";
+    List<RestoreVM> _points = new();
+    bool _on, _building;
+    readonly List<RailVM> _rail = new();
+
+    static bool In(string view, RestoreVM p) => view switch
+    {
+        "Made by TrapShack" => p.ByTrapShack,
+        "Made by Windows" => !p.ByTrapShack,
+        _ => true,
+    };
+
+    void Show()
+    {
+        _rail.Clear();
+        foreach (var v in Views)
+            _rail.Add(new RailVM { Key = v.Key, Title = v.Key, Glyph = v.Glyph, Count = _points.Count(p => In(v.Key, p)).ToString(), Selected = v.Key == _view });
+        _building = true; Rail.ItemsSource = null; Rail.ItemsSource = _rail; _building = false;
+        var shown = _points.Where(p => In(_view, p)).ToList();
+        Points.ItemsSource = shown;
+        Empty.Visibility = shown.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        Empty.Text = !_on ? "System Restore is off, so Windows keeps no restore points. Turn it on to make one."
+                   : _points.Count == 0 ? "No restore points yet. Create one before making big changes."
+                   : "None of that kind.";
+    }
+
+    void OnRailChecked(object sender, RoutedEventArgs e)
+    {
+        if (_building || ((FrameworkElement)sender).DataContext is not RailVM r || r.Key == _view) return;
+        _view = r.Key;
+        Show();
+        Scroller.ScrollToTop();
+    }
     public void Init(IPageHost host) => _host = host;
 
     public async Task LoadAsync()
     {
         var (on, points) = await Task.Run(() => (RestorePoints.IsEnabled(), RestorePoints.List()));
-        Points.ItemsSource = points.Select(p => new RestoreVM(p)).ToList();
-        CountText.Text = points.Count == 0 ? "" : $"{points.Count} saved";
-        Empty.Visibility = points.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        Empty.Text = on ? "No restore points yet. Create one before making big changes."
-                        : "System Restore is off, so Windows keeps no restore points. Turn it on to make one.";
+        _points = points.Select(p => new RestoreVM(p)).ToList();
+        _on = on;
+        Show();
+        StatOn.Text = on ? "On" : "Off";
+        StatOn.Foreground = (System.Windows.Media.Brush)FindResource(on ? "GreenBrush" : "AmberBrush");
         StatusTitle.Text = on ? "System Restore is on" : "System Restore is off";
         StatusLine.Text = on
             ? (points.Count > 0 ? $"Newest: {new RestoreVM(points[0]).When}. Windows also makes them before updates and driver installs." : "Windows also makes them before updates and driver installs.")

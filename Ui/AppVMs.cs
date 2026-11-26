@@ -198,6 +198,8 @@ public sealed class AppSectionVM : Notify, IPackCount
     public List<object> Items { get; init; } = new();
     public int Total { get; init; }
     public string Counter { get => _counter; set => Set(ref _counter, value); }
+    /// <summary>Show the little heading above the rows (when several categories show at once).</summary>
+    public bool ShowTitle { get; init; }
 }
 
 /// <summary>One removable Windows app on the Debloat apps page.</summary>

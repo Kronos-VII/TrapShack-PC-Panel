@@ -587,17 +587,44 @@
             </StackPanel>
 
             <!-- ============ SETTINGS PAGE ============ -->
-            <ScrollViewer x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="34,4,34,28">
-                    <TextBlock Text="Settings" Style="{StaticResource PageTitleText}"/>
-                    <TextBlock Text="How TrapShack looks and behaves. Everything here is remembered." FontSize="13"
-                               Foreground="{DynamicResource MutedBrush}" Margin="0,4,0,0"/>
+            <Grid x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
-                    <!-- two columns side by side on a wide window, one under the other on a narrow one -->
-                    <ui:AdaptiveGrid Columns="2" MinItemWidth="520" Gap="20">
+                <StackPanel Grid.Row="0" Margin="34,4,34,20">
+                    <TextBlock Text="APP" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
+                    <TextBlock Text="Settings" Style="{StaticResource PageTitleText}"/>
+                    <TextBlock Text="How TrapShack looks and behaves. Everything here is remembered." FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="34,0,20,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="248"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <StackPanel>
-                    <TextBlock Text="APPEARANCE" Style="{StaticResource SectionLabel}"/>
+                        <TextBlock Text="SECTIONS" Style="{StaticResource RailLabel}"/>
+                        <ItemsControl x:Name="SettingsRail">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <RadioButton Style="{StaticResource RailButton}" GroupName="setrail" IsChecked="{Binding Selected, Mode=OneWay}" Checked="OnSettingsRail"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="SettingsScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,14,24">
+                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="12" Padding="18,14" Margin="0,0,0,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="SetGlyph" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="SetTitle" FontSize="17" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="SetDesc" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <StackPanel x:Name="SetAppearance">
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
                             CornerRadius="14" Padding="20,18">
                         <StackPanel>
@@ -656,8 +683,7 @@
                     </Border>
 
                     </StackPanel>
-                    <StackPanel>
-                    <TextBlock Text="PROFILES" Style="{StaticResource SectionLabel}"/>
+                    <StackPanel x:Name="SetProfiles" Visibility="Collapsed">
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
                             CornerRadius="14" Padding="20,16">
                         <Grid>
@@ -674,7 +700,8 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Text="SAFETY" Style="{StaticResource SectionLabel}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="SetSafety" Visibility="Collapsed">
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
                             CornerRadius="14" Padding="20,16">
                         <Grid>
@@ -688,7 +715,8 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Text="UPDATES" Style="{StaticResource SectionLabel}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="SetUpdates" Visibility="Collapsed">
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
                             CornerRadius="14" Padding="20,16">
                         <StackPanel>
@@ -717,9 +745,10 @@
                         </StackPanel>
                     </Border>
                     </StackPanel>
-                    </ui:AdaptiveGrid>
-                </StackPanel>
-            </ScrollViewer>
+                    </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
 
             <!-- ============ HOME PAGE: deliberately small ============ -->
             <ScrollViewer x:Name="HomePanel" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -1044,12 +1073,27 @@
 
                             <TextBlock x:Name="PanelEmpty" Text="Nothing matches that. Try another word." Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0" Visibility="Collapsed"/>
                             <!-- every row the same height, two even columns; an odd last row spans both -->
-                            <ItemsControl x:Name="TweakList" ItemTemplateSelector="{StaticResource RowSel}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="2" MinItemWidth="380" Gap="10" RowHeight="64"/></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                            <ItemsControl x:Name="TweakList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,16">
+                                            <!-- a small heading when an area holds several groups -->
+                                            <Grid Margin="2,0,0,10" Visibility="{Binding ShowTitle, Converter={StaticResource B2V}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="10,1,0,0"/>
+                                                <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource Ink_FF1E1E25}" VerticalAlignment="Center" Margin="14,2,0,0"/>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding Rows}" ItemTemplateSelector="{StaticResource RowSel}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><ui:AdaptiveGrid Columns="2" MinItemWidth="380" Gap="10" RowHeight="64"/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock x:Name="CatFoot" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="2,14,0,0" TextWrapping="Wrap"
+                            <TextBlock x:Name="CatFoot" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="2,0,0,0" TextWrapping="Wrap"
                                        Text="Every switch can be turned back off. TrapShack keeps the original Windows value."/>
                         </StackPanel>
                     </ScrollViewer>
