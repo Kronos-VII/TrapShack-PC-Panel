@@ -32,6 +32,11 @@ public sealed class CleanRule
     public List<CleanExclude> Excludes { get; } = new();
     public string? Warning { get; set; }
     public bool Default { get; set; } = true;
+    /// <summary>
+    /// GPU and game shader caches. Not ticked by default: deleting them makes games rebuild their shaders, which
+    /// stutters for a while, so they are only cleaned when you tick them yourself.
+    /// </summary>
+    public bool ShaderCache { get; set; }
 }
 
 /// <summary>What one rule found during a scan.</summary>
@@ -43,11 +48,15 @@ public sealed class CleanScan
     public long Bytes { get; set; }
     public int Count => Files.Count + Registry.Count;
 
-    public static string Format(long bytes) =>
-        bytes < 1024 ? $"{bytes} B"
-        : bytes < 1024L * 1024 ? $"{bytes / 1024.0:0.#} KB"
-        : bytes < 1024L * 1024 * 1024 ? $"{bytes / (1024.0 * 1024):0.#} MB"
-        : $"{bytes / (1024.0 * 1024 * 1024):0.##} GB";
+    /// <summary>Three significant figures throughout, so every size in a list lines up: 5.0 MB, 36.4 MB, 186 MB, 1.24 GB.</summary>
+    public static string Format(long bytes)
+    {
+        static string Fig(double v, string unit) => (v < 100 ? v.ToString("0.0") : v.ToString("0")) + " " + unit;
+        return bytes < 1024 ? $"{bytes} B"
+             : bytes < 1024L * 1024 ? Fig(bytes / 1024.0, "KB")
+             : bytes < 1024L * 1024 * 1024 ? Fig(bytes / (1024.0 * 1024), "MB")
+             : $"{bytes / (1024.0 * 1024 * 1024):0.00} GB";
+    }
 }
 
 public static class CleanerEngine
@@ -68,7 +77,45 @@ public static class CleanerEngine
         using var s = asm.GetManifestResourceStream(name)!;
         using var r = new StreamReader(s);
         // only the safe set: on by default and no warning (the bundled file is already trimmed; this keeps it that way)
-        return Parse(r.ReadToEnd()).Where(e => e.Default && e.Warning == null).ToList();
+        return SplitShaderCaches(Parse(r.ReadToEnd()).Where(e => e.Default && e.Warning == null).ToList());
+    }
+
+    // The folders where graphics drivers, DirectX, Steam and games keep compiled shaders. Browser "shader-cache"
+    // folders are not included: those rebuild instantly and never cause stutter.
+    static readonly Regex RxShaderPath = new(
+        @"dxcache|glcache|vkcache|dxccache|nv_cache|computecache|d3dscache|shadercache|shader_cache|\\shaders\\(cache|generated)|\\shaders$|\\amd\\\*cache|\\nvidia\\\*cache|\\nvidia\\perdriverversion",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    static bool IsShaderKey(CleanFileKey k) =>
+        RxShaderPath.IsMatch(k.Path) || k.Pattern.EndsWith(".upipelinecache", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gives shader caches their own rules so they can stay unticked: a rule that is only shader caches is marked as
+    /// one, and a rule that mixes them with other files ("Steam Games", "AMD") is split in two.
+    /// </summary>
+    static List<CleanRule> SplitShaderCaches(List<CleanRule> rules)
+    {
+        var result = new List<CleanRule>(rules.Count + 16);
+        foreach (var r in rules)
+        {
+            var shader = r.FileKeys.Where(IsShaderKey).ToList();
+            if (shader.Count == 0) { result.Add(r); continue; }
+            if (shader.Count == r.FileKeys.Count && r.RegKeys.Count == 0) { r.ShaderCache = true; result.Add(r); continue; }
+
+            var part = new CleanRule
+            {
+                Name = r.Name + " Shader Cache", Section = r.Section, LangSecRef = r.LangSecRef,
+                SpecialDetect = r.SpecialDetect, ShaderCache = true,
+            };
+            part.DetectKeys.AddRange(r.DetectKeys);
+            part.DetectFiles.AddRange(r.DetectFiles);
+            part.FileKeys.AddRange(shader);
+            part.Excludes.AddRange(r.Excludes);
+            r.FileKeys.RemoveAll(IsShaderKey);
+            result.Add(r);
+            result.Add(part);
+        }
+        return result;
     }
 
     public static List<CleanRule> Parse(string content)

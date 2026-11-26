@@ -14,6 +14,11 @@
     <Company>TrapShack</Company>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Description>Windows debloat, privacy and performance tweaks with full restore.</Description>
+    <!-- startup speed: code is compiled ahead of time (ReadyToRun, set in build.ps1) and the program isn't compressed,
+         so nothing has to be unpacked or compiled when it opens -->
+    <TieredPGO>true</TieredPGO>
+    <!-- English only: leaves out the framework's translated error-message files, which keeps the program smaller -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

@@ -32,7 +32,7 @@ public static partial class Catalog
         yield return Mk("opt.gaming-phone-service", Category.Performance, "System services",
             "Set Phone Service to Disabled",
             "Manages telephony state on the device. Safe to disable if you don't use phone connectivity features or make calls from your PC",
-            Sometimes,
+            _ => Verdict.Warn("Phone Link calls from this PC stop working."),
             L(new ServiceAction("PhoneSvc", "disabled", "demand")),
             detail: "Manages telephony state on the device. Safe to disable if you don't use phone connectivity features or make calls from your PC. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
@@ -60,14 +60,14 @@ public static partial class Catalog
         yield return Mk("opt.gaming-sms-router-service", Category.Performance, "System services",
             "Set Microsoft Windows SMS Router Service to Disabled",
             "Routes SMS messages according to rules. Safe to disable if you don't use SMS features on your PC",
-            Sometimes,
+            _ => Verdict.Warn("Texting through Phone Link stops working."),
             L(new ServiceAction("SmsRouter", "disabled", "demand")),
             detail: "Routes SMS messages according to rules. Safe to disable if you don't use SMS features on your PC. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-parental-controls-service", Category.Performance, "System services",
             "Set Parental Controls Service to Disabled",
             "Enables parental controls and family safety features. Safe to disable if you don't use parental control features",
-            Sometimes,
+            _ => Verdict.Warn("Family Safety screen-time limits and content filters stop working on this PC."),
             L(new ServiceAction("WpcMonSvc", "disabled", "demand")),
             detail: "Enables parental controls and family safety features. Safe to disable if you don't use parental control features. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
@@ -88,28 +88,28 @@ public static partial class Catalog
         yield return Mk("opt.gaming-remote-access-manager", Category.Performance, "System services",
             "Set Remote Access Connection Manager to Disabled",
             "Manages VPN and dial-up connections. Set to Manual to reduce background activity while keeping VPN functionality available when needed.",
-            Sometimes,
+            _ => Verdict.Warn("Built-in Windows VPN connections and some VPN apps stop connecting while this is disabled."),
             L(new ServiceAction("RasMan", "disabled", "demand")),
             detail: "Manages VPN and dial-up connections. Set to Manual to reduce background activity while keeping VPN functionality available when needed. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-remote-access-auto", Category.Performance, "System services",
             "Set Remote Access Auto Connection Manager to Disabled",
             "Automatically connects to remote networks when programs reference remote resources. Safe to disable if you don't use auto-connect VPN features",
-            Sometimes,
+            _ => Verdict.Warn("VPN or dial-up connections that start automatically won't start on their own."),
             L(new ServiceAction("RasAuto", "disabled", "demand")),
             detail: "Automatically connects to remote networks when programs reference remote resources. Safe to disable if you don't use auto-connect VPN features. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-remote-desktop-services", Category.Performance, "System services",
             "Set Remote Desktop Services to Disabled",
             "Allows users to connect interactively to a remote computer. Set to Manual to reduce background activity while keeping Remote Desktop available.",
-            Sometimes,
+            _ => Verdict.Warn("Nobody can connect to this PC with Remote Desktop while this is disabled."),
             L(new ServiceAction("TermService", "disabled", "demand")),
             detail: "Allows users to connect interactively to a remote computer. Set to Manual to reduce background activity while keeping Remote Desktop available. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-remote-desktop-configuration", Category.Performance, "System services",
             "Set Remote Desktop Configuration to Disabled",
             "Manages Remote Desktop Services and Remote Desktop related configurations. Set to Manual to reduce background activity while keeping Remote…",
-            Sometimes,
+            _ => Verdict.Warn("Remote Desktop into this PC stops working while this is disabled."),
             L(new ServiceAction("SessionEnv", "disabled", "demand")),
             detail: "Manages Remote Desktop Services and Remote Desktop related configurations. Set to Manual to reduce background activity while keeping Remote Desktop available. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
@@ -130,21 +130,21 @@ public static partial class Catalog
         yield return Mk("opt.gaming-xbox-game-save", Category.Performance, "System services",
             "Set Xbox Live Game Save to Disabled",
             "Syncs game saves to Xbox Live cloud. Only needed for Xbox Game Pass and Microsoft Store games with cloud save features",
-            Sometimes,
+            _ => Verdict.Warn("Cloud saves for Game Pass and Microsoft Store games stop syncing. Leave it on if you play those."),
             L(new ServiceAction("XblGameSave", "disabled", "demand")),
             detail: "Syncs game saves to Xbox Live cloud. Only needed for Xbox Game Pass and Microsoft Store games with cloud save features. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-xbox-networking", Category.Performance, "System services",
             "Set Xbox Live Networking Service to Disabled",
             "Supports Xbox Live multiplayer networking. Required for Xbox multiplayer gaming but not needed for Steam/Epic/other gaming platforms",
-            Sometimes,
+            _ => Verdict.Warn("Xbox multiplayer and party chat in Game Pass and Microsoft Store games can stop working."),
             L(new ServiceAction("XboxNetApiSvc", "disabled", "demand")),
             detail: "Supports Xbox Live multiplayer networking. Required for Xbox multiplayer gaming but not needed for Steam/Epic/other gaming platforms. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-biometric-service", Category.Performance, "System services",
             "Set Windows Biometric Service to Disabled",
             "Enables fingerprint and facial recognition login via Windows Hello. Safe to disable on desktop systems without biometric hardware",
-            Sometimes,
+            s => s.IsLaptop ? Verdict.Warn("Windows Hello fingerprint and face sign-in stop working. You sign in with your PIN or password instead.") : Verdict.Opt("Windows Hello fingerprint and face sign-in stop working. You sign in with your PIN or password instead."),
             L(new ServiceAction("WbioSrvc", "disabled", "demand")),
             detail: "Enables fingerprint and facial recognition login via Windows Hello. Safe to disable on desktop systems without biometric hardware. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
@@ -165,14 +165,14 @@ public static partial class Catalog
         yield return Mk("opt.gaming-sensor-monitoring-service", Category.Performance, "System services",
             "Set Sensor Monitoring Service to Disabled",
             "Monitors various sensors like ambient light and orientation. Safe to disable on desktop systems without sensor hardware",
-            Sometimes,
+            s => s.IsLaptop ? Verdict.Warn("On a laptop or tablet, auto-brightness and screen rotation stop working.") : Verdict.Opt("On a laptop or tablet, auto-brightness and screen rotation stop working."),
             L(new ServiceAction("SensrSvc", "disabled", "demand")),
             detail: "Monitors various sensors like ambient light and orientation. Safe to disable on desktop systems without sensor hardware. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-sensor-data-service", Category.Performance, "System services",
             "Set Sensor Data Service to Disabled",
             "Delivers data from a variety of sensors to applications. Safe to disable on desktop systems without sensor hardware",
-            Sometimes,
+            s => s.IsLaptop ? Verdict.Warn("On a laptop or tablet, auto-brightness and screen rotation stop working.") : Verdict.Opt("On a laptop or tablet, auto-brightness and screen rotation stop working."),
             L(new ServiceAction("SensorDataService", "disabled", "demand")),
             detail: "Delivers data from a variety of sensors to applications. Safe to disable on desktop systems without sensor hardware. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
     }

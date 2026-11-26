@@ -62,6 +62,19 @@ public static partial class Catalog
             restart: true);
     }
 
+    /// <summary>
+    /// The DirectX graphics settings live in one string ("AutoHDREnable=1;SwapEffectUpgradeEnable=1;"). This sets one
+    /// entry and keeps the others, so turning on windowed optimizations doesn't switch off Auto HDR or VRR settings.
+    /// </summary>
+    static string WithDirectXSetting(string name, string value)
+    {
+        var current = RegUtil.Read(RegistryHive.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings") as string ?? "";
+        var parts = current.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(p => !p.StartsWith(name + "=", StringComparison.OrdinalIgnoreCase)).ToList();
+        parts.Add($"{name}={value}");
+        return string.Join(";", parts) + ";";
+    }
+
     static IEnumerable<Tweak> MoreGaming()
     {
         yield return Mk("gaming.windowed-opt", Category.Gaming, GameExperience,
@@ -69,7 +82,7 @@ public static partial class Catalog
             "Windowed and borderless games use the modern flip presentation model for lower latency.",
             s => s.Build >= 22621 ? Verdict.Rec("Microsoft's own Windows 11 feature, free and safe.") : Verdict.No("Needs Windows 11 version 22H2 or newer."),
             L(new RegistryAction(RegistryHive.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings",
-                "SwapEffectUpgradeEnable=1;", RegistryValueKind.String, null,
+                () => WithDirectXSetting("SwapEffectUpgradeEnable", "1"), RegistryValueKind.String, null,
                 matcher: v => v is string t && t.Contains("SwapEffectUpgradeEnable=1", StringComparison.OrdinalIgnoreCase))),
             detail: "The same switch as Settings > System > Display > Graphics > Default graphics settings > Optimizations for windowed games. " +
                     "Restore puts back whatever value was there before.");

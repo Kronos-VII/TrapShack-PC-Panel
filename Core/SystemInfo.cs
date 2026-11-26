@@ -120,6 +120,17 @@ public sealed class SystemInfo
         return s;
     }
 
+    /// <summary>What the slow checks are tied to: they only change with Windows itself (or new hardware, caught by the background re-check).</summary>
+    public string ProbeKeyNow => $"{Build}.{Ubr}|{Cpu}";
+
+    /// <summary>Starts with the slow checks from the last run on this build; <see cref="ProbeSlow"/> refreshes them afterwards.</summary>
+    public void UseCachedProbe(bool? ssd, string? recall, IEnumerable<string> gpus)
+    {
+        SystemDriveIsSsd = ssd;
+        RecallFeatureState = recall;
+        Gpus = Gpus.Concat(gpus).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>Slower checks (PowerShell). Safe to call from a background thread.</summary>
     public void ProbeSlow()
     {
@@ -136,7 +147,9 @@ $recall = $null
 if (" + (Is24H2OrNewer ? "$true" : "$false") + @") {
   try { $recall = (Get-WindowsOptionalFeature -Online -FeatureName Recall -ErrorAction Stop).State.ToString() } catch {}
 }
-@{ disk = ""$disk""; recall = ""$recall"" } | ConvertTo-Json -Compress
+$gpus = @()
+try { $gpus = @(Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object { ""$($_.Name)"".Trim() } | Where-Object { $_ }) } catch {}
+@{ disk = ""$disk""; recall = ""$recall""; gpus = $gpus } | ConvertTo-Json -Compress
 ", 120_000);
 
             var json = r.Output.Trim();
@@ -149,6 +162,16 @@ if (" + (Is24H2OrNewer ? "$true" : "$false") + @") {
 
             var recall = doc.RootElement.TryGetProperty("recall", out var rc) ? rc.GetString() : null;
             RecallFeatureState = string.IsNullOrWhiteSpace(recall) ? null : recall;
+
+            // the graphics cards as Windows' own device list names them: covers PCs where the driver keys can't be read
+            if (doc.RootElement.TryGetProperty("gpus", out var g))
+            {
+                var names = (g.ValueKind == JsonValueKind.Array ? g.EnumerateArray().Select(x => x.GetString()) : new[] { g.GetString() })
+                    .Where(n => !string.IsNullOrWhiteSpace(n) && !n!.Contains("Basic", StringComparison.OrdinalIgnoreCase)
+                                && !n.Contains("Remote", StringComparison.OrdinalIgnoreCase))
+                    .Select(n => n!.Trim());
+                Gpus = Gpus.Concat(names).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
         }
         catch (Exception ex) { Log.Error("Hardware probe failed: " + ex.Message); }
     }
@@ -203,6 +226,27 @@ if (" + (Is24H2OrNewer ? "$true" : "$false") + @") {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
     }
+
+    /// <summary>
+    /// Whether this PC's firmware supports hibernation (S4). Read from Windows' power capabilities; virtual machines
+    /// and some Modern Standby devices report no.
+    /// </summary>
+    public static bool FirmwareSupportsHibernation()
+    {
+        var buffer = Marshal.AllocHGlobal(256);   // SYSTEM_POWER_CAPABILITIES is about 76 bytes
+        try
+        {
+            for (var i = 0; i < 256; i++) Marshal.WriteByte(buffer, i, 0);
+            if (!GetPwrCapabilities(buffer)) return true;   // can't tell: assume yes, as nearly every PC can
+            // PowerButtonPresent, SleepButtonPresent, LidPresent, SystemS1, S2, S3, then SystemS4 (one byte each)
+            return Marshal.ReadByte(buffer, 6) != 0 || Marshal.ReadByte(buffer, 8) != 0;   // S4, or a hibernation file exists
+        }
+        catch { return true; }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
+
+    [DllImport("powrprof.dll", SetLastError = true)]
+    static extern bool GetPwrCapabilities(IntPtr capabilities);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern bool EnumDisplayDevices(string? device, uint index, ref DISPLAY_DEVICE dd, uint flags);

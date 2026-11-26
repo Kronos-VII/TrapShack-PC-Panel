@@ -36,7 +36,7 @@ public partial class AppsPage : UserControl
 
     static string GlyphOf(string group) => group switch
     {
-        "Game launchers" => "\uE7FC", "Gaming tools" => "\uE945", "Runtimes & dependencies" => "\uE943", "Communication" => "\uE8BD",
+        "Game launchers" => "\uE7FC", "Gaming tools" => "\uE945", "Runtimes & dependencies" => "\uE950", "Communication" => "\uE8BD",
         "Browsers" => "\uE774", "Media" => "\uE8D6", "Utilities" => "\uE90F", "Creative & documents" => "\uE70F", "Development" => "\uE943",
         _ => "\uE71D",
     };

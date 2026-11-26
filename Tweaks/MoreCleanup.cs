@@ -35,17 +35,19 @@ public static partial class Catalog
             "Hide the Start menu recommendations",
             "Removes the Recommended section from Start (Windows 11).",
             s => W11(s, Verdict.Opt()),
-            L(LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Start", "HideRecommendedSection", 1, 0),
-              LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Education", "IsEducationEnvironment", 1, 0),
+            L(LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Start", "HideRecommendedSection", 1, null),
+              LM(@"SOFTWARE\Microsoft\PolicyManager\current\device\Education", "IsEducationEnvironment", 1, null),
               LM(@"SOFTWARE\Policies\Microsoft\Windows\Explorer", "HideRecommendedSection", 1, null)),
-            detail: "Works fully on Pro, Enterprise and Education. On Home the setting may be ignored.", signOut: true);
+            detail: "Works fully on Pro, Enterprise and Education. On Home the setting may be ignored. " +
+                    "Side effect: Windows treats the PC as an education device, which also turns off Windows Spotlight pictures on the lock screen.",
+            signOut: true);
 
         yield return Mk("clean.new-outlook", Category.Customize, Appearance,
             "Stay on classic Outlook",
             "Hides the New Outlook switch and stops automatic migration to it.",
             Sometimes,
-            L(CU(@"SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences", "UseNewOutlook", 0, 1),
-              CU(@"Software\Microsoft\Office\16.0\Outlook\Options\General", "HideNewOutlookToggle", 1, 0),
+            L(CU(@"SOFTWARE\Microsoft\Office\16.0\Outlook\Preferences", "UseNewOutlook", 0, null),
+              CU(@"Software\Microsoft\Office\16.0\Outlook\Options\General", "HideNewOutlookToggle", 1, null),
               CU(@"Software\Policies\Microsoft\Office\16.0\Outlook\Options\General", "DoNewOutlookAutoMigration", 0, null),
               CU(@"Software\Policies\Microsoft\Office\16.0\Outlook\Preferences", "NewOutlookMigrationUserSetting", 0, null)),
             detail: "Only matters if you use the desktop Outlook from Microsoft 365.");
@@ -53,7 +55,7 @@ public static partial class Catalog
         yield return Mk("clean.razer-block", Category.Debloat, Deep,
             "Block Razer software auto-install",
             "Stops Windows installing Razer Synapse when a Razer device is plugged in.",
-            Sometimes,
+            _ => Verdict.Warn("Also stops Windows downloading drivers automatically for any new device. Install drivers yourself while this is on."),
             L(LM(@"SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig", 0, 1),
               LM(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Device Installer", "DisableCoInstallers", 1, 0),
               BlockFolder("Razer block", () => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Installer", "Razer"))),
@@ -105,7 +107,7 @@ public static partial class Catalog
             Sometimes,
             L(new CustomAction(
                 "Deny Everyone access to the Store search database (restore removes the rule)",
-                isApplied: () => StoreDbPaths().Any() && StoreDbPaths().All(IsDenied),
+                isApplied: () => StoreDbPaths().Any() && StoreDbPaths().All(StoreDbBlocked),
                 apply: () => StoreDb(true),
                 revert: _ => StoreDb(false))),
             detail: "Uses icacls on Microsoft.WindowsStore's store.db. Restore removes the deny rule.",
@@ -117,9 +119,10 @@ public static partial class Catalog
             s => Verdict.Warn("Decrypting removes disk encryption protection. Laptops are exposed if lost or stolen."),
             L(new CustomAction(
                 "Run Disable-BitLocker on the system drive (restore runs Enable-BitLocker)",
-                isApplied: () => Shell.PowerShell("(Get-BitLockerVolume -MountPoint $env:SystemDrive).ProtectionStatus -eq 'On'").Output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase),
-                apply: () => Ps("Disable-BitLocker -MountPoint $env:SystemDrive"),
-                revert: _ => Ps("Enable-BitLocker -MountPoint $env:SystemDrive -EncryptionMethod XtsAes128 -RecoveryPasswordProtector"))),
+                isApplied: () => SlowCheck.Get("bitlocker.off", () =>
+                    Shell.PowerShell("(Get-BitLockerVolume -MountPoint $env:SystemDrive).ProtectionStatus -eq 'On'").Output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase)),
+                apply: () => { SlowCheck.Forget("bitlocker.off"); Ps("Disable-BitLocker -MountPoint $env:SystemDrive"); },
+                revert: _ => { SlowCheck.Forget("bitlocker.off"); Ps("Enable-BitLocker -MountPoint $env:SystemDrive -EncryptionMethod XtsAes128 -RecoveryPasswordProtector"); })),
             detail: "Decryption takes a while in the background. Restore re-encrypts with a new recovery password you must save.",
             risk: Risk.Advanced,
             confirm: "This decrypts your system drive. Continue?");
@@ -195,6 +198,7 @@ public static partial class Catalog
     static void Icacls(string args)
     {
         var r = Shell.Run("icacls.exe", args, 60_000);
+        Log.Info($"icacls {args} -> exit {r.ExitCode}: {(r.Output + r.Error).Trim()}");
         if (!r.Ok) throw new InvalidOperationException($"icacls failed: {(r.Output + r.Error).Trim()}");
     }
 
@@ -219,27 +223,75 @@ public static partial class Catalog
             if (Directory.Exists(p)) Icacls($"\"{p}\" /remove:d \"*S-1-1-0\"");
         });
 
-    static bool IsDenied(string path)
+    static string EveryoneName()
     {
-        if (!Directory.Exists(path) && !File.Exists(path)) return false;
-        var r = Shell.Run("icacls.exe", $"\"{path}\"", 30_000);
-        return r.Ok && r.Output.Contains("Everyone:", StringComparison.OrdinalIgnoreCase)
-               && r.Output.Split('\n').Any(l => l.Contains("Everyone:") && l.Contains("(DENY)"));
+        try
+        {
+            var name = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null)
+                .Translate(typeof(System.Security.Principal.NTAccount)).Value;
+            return name.Contains('\\') ? name[(name.LastIndexOf('\\') + 1)..] : name;
+        }
+        catch { return "Everyone"; }
     }
 
+    static bool IsDenied(string path)
+    {
+        var parent = Path.GetDirectoryName(path);
+        if (!Directory.Exists(path) && !(parent != null && Directory.Exists(parent) && Directory.GetFileSystemEntries(parent, Path.GetFileName(path)).Length > 0)) return false;
+        var r = Shell.Run("icacls.exe", $"\"{path}\"", 30_000);
+        // "Everyone" has another name on non-English Windows ("Jeder", "Tout le monde"): ask Windows for it
+        var everyone = EveryoneName() + ":";
+        return r.Ok && r.Output.Split('\n').Any(l => l.Contains(everyone, StringComparison.OrdinalIgnoreCase) && l.Contains("(DENY)"));
+    }
+
+    /// <summary>
+    /// Every Store search database for this account. Found by listing the folder: once the block is in place, Windows
+    /// refuses even "does this file exist?", so File.Exists would wrongly answer no.
+    /// </summary>
     static IEnumerable<string> StoreDbPaths()
     {
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
         if (!Directory.Exists(root)) yield break;
         foreach (var pkg in Directory.GetDirectories(root, "Microsoft.WindowsStore_*"))
         {
-            var db = Path.Combine(pkg, "LocalState", "store.db");
-            if (File.Exists(db)) yield return db;
+            var dir = Path.Combine(pkg, "LocalState");
+            if (!Directory.Exists(dir)) continue;
+            string[] hits;
+            try { hits = Directory.GetFiles(dir, "store.db"); } catch { continue; }
+            foreach (var db in hits) yield return db;
+        }
+    }
+
+    /// <summary>
+    /// The block works when Windows refuses to open the file, so that is the test: try to open it for reading.
+    /// "Access denied" means it's blocked. (A file that another program has open is not blocked.)
+    /// </summary>
+    static bool StoreDbBlocked(string db)
+    {
+        try
+        {
+            using var f = new FileStream(db, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return false;
+        }
+        catch (UnauthorizedAccessException) { return true; }
+        catch (Exception ex)
+        {
+            Log.Info($"Store search block check: {db}: {ex.GetType().Name}: {ex.Message}. Asking icacls instead.");
+            return IsDenied(db);
         }
     }
 
     static void StoreDb(bool deny)
     {
+        // Like Win11Debloat: where the database doesn't exist yet (fresh accounts, EU PCs), create it empty first so
+        // Windows can't create it later without the block.
+        if (deny && !StoreDbPaths().Any())
+        {
+            var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Packages", "Microsoft.WindowsStore_8wekyb3d8bbwe", "LocalState", "store.db");
+            Directory.CreateDirectory(Path.GetDirectoryName(db)!);
+            if (!File.Exists(db)) File.Create(db).Dispose();
+        }
         foreach (var db in StoreDbPaths())
         {
             Icacls(deny ? $"\"{db}\" /deny \"*S-1-1-0:F\"" : $"\"{db}\" /remove:d \"*S-1-1-0\"");

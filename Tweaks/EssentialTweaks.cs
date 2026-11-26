@@ -34,7 +34,12 @@ public static partial class Catalog
         yield return Mk("essential.hibernation", Category.Debloat, Essential,
             "Turn off hibernation",
             "Deletes hiberfile.sys (often several GB) and removes Hibernate and Fast Startup.",
-            s => s.IsLaptop
+            // a PC whose firmware can't hibernate couldn't turn it back on afterwards, so it isn't offered there
+            // (unless hibernation already reads as off, so the switch can still be switched off again)
+            s => !SystemInfo.FirmwareSupportsHibernation()
+                     && RegUtil.ReadInt(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled") != 0
+                ? Verdict.No("This PC can't hibernate (its firmware doesn't support it), so there's nothing to turn off.")
+                : s.IsLaptop
                 ? Verdict.Warn("Laptops rely on hibernation to save battery and survive running flat. Leave this off unless you are short on disk space.")
                 : s.SystemDriveIsSsd == false ? Verdict.Opt("Fast Startup helps on a hard disk. You will lose it.") : Verdict.Opt(),
             L(LM(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FlyoutMenuSettings", "ShowHibernateOption", 0, 1),
@@ -42,7 +47,12 @@ public static partial class Catalog
                 "Run powercfg /hibernate off (restore runs powercfg /hibernate on)",
                 isApplied: () => RegUtil.ReadInt(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled") == 0,
                 apply: () => RunPowerCfg("/hibernate off"),
-                revert: _ => RunPowerCfg("/hibernate on"))),
+                revert: _ =>
+                {
+                    // a PC whose firmware can't hibernate (a virtual machine, some Modern Standby devices) has nothing to turn back on
+                    try { RunPowerCfg("/hibernate on"); }
+                    catch when (!SystemInfo.FirmwareSupportsHibernation()) { Log.Info("Hibernation isn't supported by this PC's firmware: nothing to turn back on."); }
+                })),
             detail: "Frees disk space equal to roughly 40% of your RAM. Fast Startup depends on hibernation, so Windows will do a full boot every time.",
             restart: true);
 

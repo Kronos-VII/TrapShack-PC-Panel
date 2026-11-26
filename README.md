@@ -56,6 +56,11 @@ ones the source marks as a personal preference. The exceptions are Caution items
 Uses the `LibreHardwareMonitorLib` package. CPU sensors need its driver, which Windows may block with Memory Integrity on; the page
 says so and everything else keeps working.
 
+System info shows one card each for Windows, the processor, every graphics card, memory, the motherboard, storage, the network
+connection in use (link speed and DNS) and security (Secure Boot, TPM, virtualization security and Memory integrity). It only reads; nothing
+on it changes the PC. **Copy specs** copies the hardware as a short text block for Discord, without the PC name or network details.
+Temperatures reads memory straight from Windows, so its total matches System info and Task Manager.
+
 ## Debloat apps
 Lists the Windows apps found on this PC (from `Core/WinAppCatalog.cs`) with a label on each: *Reinstall from Store*, *Core app*, *Can't be reinstalled* (red) or *Keep* (locked: the Store, App Installer and the Xbox sign-in pieces are never removable). Removal asks first, names anything that can't come back, removes the app for all users and from new accounts, and then offers a restart.
 
@@ -66,3 +71,37 @@ Installs game launchers, game runtimes (Visual C++ 2005-2022 in 64 and 32-bit, D
 * If winget is missing, installing is switched off with a note; detection still works.
 * Logos come from the CC0 Simple Icons set (`Core/AppIcons.cs`); apps without one get a monogram tile. All brand names and logos belong to their owners.
 
+
+## Settings Windows changed back
+Big Windows updates sometimes reset settings. When a setting TrapShack applied (and saw working) reads as off again, Home shows one
+small card listing them, with *Turn back on* and *Keep as is*. It never pops up, and it stays hidden when nothing was reset.
+
+## Speed
+* The program is compiled ahead of time (ReadyToRun) and isn't compressed, so nothing is unpacked or compiled when it opens.
+  The .exe is larger because of this.
+* Startup asks the Task Scheduler and the registry directly instead of PowerShell/DISM where it can (scheduled tasks,
+  provisioned apps). The slow hardware checks (drive type, Recall, graphics names) are remembered per Windows build and
+  re-read quietly after the window is up.
+* After the window shows, background work starts one piece at a time: installed apps, then the temperature sensors.
+* While the app isn't the focused window (a game is running, or it's minimised) it does no re-checks at all, and no
+  hidden animation keeps drawing frames. Checks that need PowerShell (BitLocker, Defender sample submission) are kept
+  for ten minutes and refreshed straight after any change to them.
+
+## PC Cleaner and shader caches
+GPU and game shader caches (NVIDIA, AMD, Intel, DirectX, Steam's shader pre-cache and games' own shader folders) are
+listed as their own rules and are **not ticked by default**: deleting them makes games rebuild their shaders, which
+stutters for a while. They are still measured, so you can see their size and tick them when you want them gone.
+
+## Testing every setting safely
+The program has a self-test that switches every setting on, checks Windows reports it, switches it off and checks
+that every value is back exactly as it was. It only runs inside Windows Sandbox or on a GitHub build machine (both are
+thrown away afterwards); started anywhere else it refuses and closes. Normal use never runs it.
+
+* **Test in Sandbox.bat**: after build.bat, double-click it. Windows Sandbox opens, the test runs inside it, and the
+  report opens on your PC when it's done (`Self-test results\TrapShack self-test.txt`). Needs Windows Sandbox turned on
+  (Windows 11 Pro: "Turn Windows features on or off" > Windows Sandbox).
+* **GitHub**: every push builds the program and runs the self-test on a Windows build machine
+  (`.github/workflows/build-and-test.yml`). The finished program and the report are attached to each run under Actions.
+
+Left out of the test: one-time actions, app removals, and the few settings that uninstall something or need DISM
+(the report lists them with the reason).

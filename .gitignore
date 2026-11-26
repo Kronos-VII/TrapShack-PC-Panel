@@ -4,3 +4,9 @@ dist/
 *.log
 *.user
 .vs/
+Self-test results/
+
+# your own helper scripts: they stay on your PC and never go to GitHub
+push.bat
+release.bat
+Test in Sandbox.bat

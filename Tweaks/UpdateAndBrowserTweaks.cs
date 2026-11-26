@@ -66,7 +66,8 @@ public static partial class Catalog
             detail: "Applies the \"Configure Automatic Updates: disabled\" policy and disables the Windows Update service. " +
                     "Switch it off again any time to go back to normal updating.",
             risk: Risk.Advanced,
-            confirm: "With Windows Update disabled your PC won't receive security patches, which puts it at risk. Continue only if you understand that.");
+            confirm: "With Windows Update disabled your PC won't receive security patches, which puts it at risk. " +
+                     "Microsoft Store apps also can't install or update while it's off. Continue only if you understand that.");
     }
 
     static IEnumerable<Tweak> Browsers()

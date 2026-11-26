@@ -63,7 +63,7 @@
                 <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
                 <TextBlock Text="Startup apps" FontSize="26" FontWeight="SemiBold"/>
                 <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
-                           Text="Programs that open when Windows starts. Switching one off works like Task Manager: it stays installed and can be switched back on."/>
+                           Text="Programs that open with Windows. Switching one off works like Task Manager and can be undone."/>
             </StackPanel>
             <Grid Grid.Column="1" Width="300" VerticalAlignment="Bottom">
                 <TextBox x:Name="Search" TextChanged="OnSearchChanged" Height="40" Padding="36,0,12,0" VerticalContentAlignment="Center" FontSize="13"

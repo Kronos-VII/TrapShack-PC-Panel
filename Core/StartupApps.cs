@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.IO;
@@ -67,7 +68,7 @@ public static class StartupApps
                     if (fn.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;
                     list.Add(new StartupEntry
                     {
-                        Name = Path.GetFileNameWithoutExtension(f), Command = f, Where = where, FilePath = f, Publisher = PublisherOf(f),
+                        Name = Tidy(Path.GetFileNameWithoutExtension(f)), Command = f, Where = where, FilePath = f, Publisher = PublisherOf(f),
                         ApprovedRoot = root, ApprovedSub = Approved + "StartupFolder", ApprovedName = fn,
                     });
                 }
@@ -197,18 +198,41 @@ public static class StartupApps
         catch { return ""; }
     }
 
-    /// <summary>The program's own product name when the registry name is cryptic.</summary>
+    /// <summary>The program's own product name when the registry name is cryptic, tidied for display.</summary>
     static string Friendly(string name, string? file)
     {
+        var reg = Tidy(name);
         try
         {
             if (file != null && file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
-                var d = FileVersionInfo.GetVersionInfo(file).FileDescription?.Trim();
-                if (!string.IsNullOrEmpty(d) && d.Length <= 48 && !d.Contains("setup", StringComparison.OrdinalIgnoreCase)) return d;
+                var info = FileVersionInfo.GetVersionInfo(file);
+                var d = Tidy(info.FileDescription?.Trim() ?? "");
+                if (d.Length > 0 && d.Length <= 48 && !d.Contains("setup", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsGeneric(d)) return d;
+                    // "Update", "Launcher": say whose it is
+                    if (reg.Length > 0 && !IsGeneric(reg)) return reg;
+                    var maker = Regex.Match(info.CompanyName ?? "", @"^[\p{L}\p{N}]+").Value;
+                    return maker.Length > 0 ? $"{maker} {d.ToLowerInvariant()}" : d;
+                }
             }
         }
         catch { }
-        return name;
+        return reg.Length > 0 ? reg : name;
+    }
+
+    static readonly HashSet<string> Generic = new(StringComparer.OrdinalIgnoreCase)
+    { "update", "updater", "launcher", "helper", "service", "tray", "app", "application", "client", "agent", "startup", "autorun", "monitor", "bootstrapper" };
+
+    static bool IsGeneric(string s) => Generic.Contains(s.Trim());
+
+    /// <summary>"Discord - https://discord.com/" → "Discord"; "EpicGamesLauncher" → "Epic Games Launcher".</summary>
+    static string Tidy(string s)
+    {
+        s = Regex.Replace(s, @"\s*[-–|:]?\s*https?://\S*", "", RegexOptions.IgnoreCase).Trim();
+        if (!s.Contains(' ') && s.Length > 8 && Regex.IsMatch(s, "[a-z][A-Z]"))
+            s = Regex.Replace(s, @"(?<=[a-z])(?=[A-Z])", " ");
+        return s;
     }
 }

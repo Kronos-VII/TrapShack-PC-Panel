@@ -42,7 +42,7 @@
                 <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
                 <TextBlock Text="Restore points" FontSize="26" FontWeight="SemiBold"/>
                 <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
-                           Text="Snapshots of Windows' settings and system files. Make one before big changes; go back with Windows' own System Restore."/>
+                           Text="Snapshots of Windows' settings and system files. Make one before big changes."/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
                 <Button x:Name="TurnOnBtn" Style="{StaticResource GhostButton}" Height="40" Content="Turn on System Restore" Margin="0,0,10,0" Visibility="Collapsed" Click="OnTurnOn"/>
@@ -85,7 +85,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,14,0" VerticalAlignment="Center">
-                                <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
+                                <TextBlock Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="17" Foreground="{DynamicResource AccentHotBrush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">

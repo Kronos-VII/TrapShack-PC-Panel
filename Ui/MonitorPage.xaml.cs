@@ -82,7 +82,7 @@ public partial class MonitorPage : UserControl
     bool _failed, _busy;
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly List<MonitorDeviceVM> _devices = new();
-    string _cpu = "Processor";
+    string _cpu = "Processor", _ram = "System memory";
     List<string> _gpus = new();
 
     public MonitorPage()
@@ -95,6 +95,7 @@ public partial class MonitorPage : UserControl
     {
         _cpu = string.IsNullOrWhiteSpace(sys.Cpu) ? "Processor" : sys.Cpu;
         _gpus = sys.Gpus.ToList();
+        if (sys.RamGb > 0) _ram = $"{sys.RamGb:0.#} GB usable";
     }
 
     /// <summary>Starts the sensor driver in the background (it takes a moment), so the page opens with figures.</summary>
@@ -159,7 +160,7 @@ public partial class MonitorPage : UserControl
             if (g.Key == "RAM")
             {
                 var used = rows[0];
-                var dev = Device("RAM", "Memory", "System memory", "", false);
+                var dev = Device("RAM", "Memory", _ram, "", false);
                 var pct = used.Pct >= 0 ? used.Pct : (double?)null;
                 var lvl = pct is null ? "none" : pct >= 90 ? "hot" : pct >= 75 ? "warm" : "ok";
                 dev.Update(pct, used.Value.Replace(" GB", "") + " GB", lvl,
@@ -168,8 +169,11 @@ public partial class MonitorPage : UserControl
             }
             var isCpu = g.Key == "CPU";
             var gpuIndex = isCpu ? -1 : g.Key == "GPU" ? 0 : int.TryParse(g.Key.Replace("GPU", "").Trim(), out var n) ? n - 1 : 0;
-            var name = isCpu ? _cpu : gpuIndex >= 0 && gpuIndex < _gpus.Count ? _gpus[gpuIndex] : "Graphics card";
-            var device = Device(g.Key, isCpu ? "Processor" : g.Key == "GPU" ? "Graphics" : "Graphics " + (gpuIndex + 1), name, isCpu ? "" : "", true);
+            var sensorGpus = _sensors?.GpuNames ?? new List<string>();
+            var name = isCpu ? _cpu
+                     : gpuIndex >= 0 && gpuIndex < sensorGpus.Count ? sensorGpus[gpuIndex]
+                     : gpuIndex >= 0 && gpuIndex < _gpus.Count ? _gpus[gpuIndex] : "Graphics card";
+            var device = Device(g.Key, isCpu ? "Processor" : g.Key == "GPU" ? "Graphics" : "Graphics " + (gpuIndex + 1), name, isCpu ? "" : "", true);
 
             var temp = rows.FirstOrDefault(r => Kind(r.Label) == "temperature");
             double? t = null;

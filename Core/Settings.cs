@@ -31,6 +31,15 @@ public sealed class Settings
     public long LastCleanBytes { get; set; } = -1;
     public DateTime? LastCleanAt { get; set; }
 
+    /// <summary>
+    /// The slow hardware checks (drive type, Recall, graphics names) from the last run, and the Windows build they were read on.
+    /// On the same build the app starts with these at once and re-reads them quietly in the background.
+    /// </summary>
+    public string? ProbeKey { get; set; }
+    public bool? ProbeSsd { get; set; }
+    public string? ProbeRecall { get; set; }
+    public List<string> ProbeGpus { get; set; } = new();
+
     /// <summary>True once the "missing runtimes" note has been dismissed.</summary>
     public bool RuntimeNoticeHidden { get; set; }
 

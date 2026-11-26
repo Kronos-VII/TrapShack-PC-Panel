@@ -45,10 +45,10 @@ public sealed class TweakEngine
                 var key = Key(t, i);
                 if (!State.Has(key))
                 {
-                    // If this target is already in the tweaked state (set earlier by another TrapShack tweak that
-                    // shares the same registry value, or by another tool), the live value is not an "original".
-                    // Store nothing so Revert falls back to the Windows default instead of a stale value.
-                    State.Set(key, action.IsApplied() ? "" : (action.Capture() ?? ""));
+                    // If this part is already in the tweaked state (you set it yourself, Windows ships that way, or
+                    // another setting that shares the value is on), TrapShack doesn't change it, and undoing must not
+                    // change it either. That is remembered as AlreadySet, and Revert leaves the part alone.
+                    State.Set(key, action.IsApplied() ? AlreadySet : (action.Capture() ?? ""));
                 }
                 touched.Add((i, action));
                 action.Apply();
@@ -63,7 +63,7 @@ public sealed class TweakEngine
                 try
                 {
                     var saved = State.Get(Key(t, index));
-                    action.Revert(string.IsNullOrEmpty(saved) ? null : saved);
+                    if (saved != AlreadySet) action.Revert(string.IsNullOrEmpty(saved) ? null : saved);
                 }
                 catch (Exception rex) { Log.Error($"Rollback of {t.Id}/{index} failed: {rex.Message}"); }
                 State.Remove(Key(t, index));
@@ -84,11 +84,17 @@ public sealed class TweakEngine
             var key = Key(t, i);
             if (!State.Has(key)) continue;
             var saved = State.Get(key);
-            try { t.Actions[i].Revert(string.IsNullOrEmpty(saved) ? null : saved); }
+            try { if (saved != AlreadySet) t.Actions[i].Revert(string.IsNullOrEmpty(saved) ? null : saved); }
             catch (Exception ex) { Log.Error($"Putting back {t.Id}/{i} failed: {ex.Message}"); }
             State.Remove(key);
         }
     }
+
+    /// <summary>
+    /// Saved for a part of a setting that was already in the wanted state when it was applied. Undo leaves such a part
+    /// untouched. (Older versions saved an empty text here; that still means "no original known, use Windows' default".)
+    /// </summary>
+    public const string AlreadySet = "=already-set";
 
     /// <summary>State key holding the id of a setting that was being applied when the app last stopped.</summary>
     public const string PendingKey = "app.pending-apply";
@@ -105,6 +111,8 @@ public sealed class TweakEngine
             onStep?.Invoke(ordinal++);
 
             var saved = State.Get(Key(t, i));
+            // this part was already like this before TrapShack touched it: leave it exactly as it is
+            if (saved == AlreadySet) continue;
             action.Revert(string.IsNullOrEmpty(saved) ? null : saved);
         }
         State.RemovePrefix(t.Id + "/");

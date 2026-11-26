@@ -10,13 +10,13 @@ namespace TrapShack.Ui;
 /// <summary>One cleaning rule on the page.</summary>
 public sealed class CleanRuleVM : Notify
 {
-    public CleanRuleVM(CleanRule rule) { Rule = rule; }
+    public CleanRuleVM(CleanRule rule) { Rule = rule; _checked = !rule.ShaderCache; }
     public CleanRule Rule { get; }
     public string Name => Rule.Name;
     public Action? Changed;
 
     bool _checked = true, _busy, _edit = true;
-    public bool Checked { get => _checked; set { if (Set(ref _checked, value)) Changed?.Invoke(); } }
+    public bool Checked { get => _checked; set { if (Set(ref _checked, value)) { Raise(nameof(Sub)); Changed?.Invoke(); } } }
     public bool IsBusy { get => _busy; set { if (Set(ref _busy, value)) { Raise(nameof(SizeText)); Raise(nameof(Sub)); } } }
     public bool CanEdit { get => _edit; set => Set(ref _edit, value); }
 
@@ -37,7 +37,11 @@ public sealed class CleanRuleVM : Notify
         get
         {
             if (_busy) return "Checking…";
-            if (_scan == null) return "Not scanned yet";
+            // shader caches say why they start unticked
+            var note = Rule.ShaderCache && !_checked ? "Not ticked by default: games rebuild it and may stutter for a while" : null;
+            if (_scan == null) return note ?? "Not scanned yet";
+            if (note != null && _scan.Count > 0)
+                return (_scan.Files.Count == 1 ? "1 file" : $"{_scan.Files.Count:N0} files") + "  ·  " + "not ticked by default, games rebuild it";
             if (_scan.Count == 0) return "Nothing to clean";
             var parts = new List<string>();
             if (_scan.Files.Count > 0) parts.Add(_scan.Files.Count == 1 ? "1 file" : $"{_scan.Files.Count:N0} files");
@@ -257,7 +261,8 @@ public partial class CleanerPage : UserControl
     void OnResetTicks(object sender, RoutedEventArgs e)
     {
         if (_working) return;
-        foreach (var r in _all.SelectMany(c => c.Rules)) r.Checked = true;
+        // every safe rule except the GPU shader caches, which stay your choice
+        foreach (var r in _all.SelectMany(c => c.Rules)) r.Checked = !r.Rule.ShaderCache;
         UpdatePaneHeader();
     }
 
@@ -289,7 +294,7 @@ public partial class CleanerPage : UserControl
         {
             StateSize.Text = total > 0 ? CleanScan.Format(total) : $"{found.Sum(r => r.Scan!.Count)} items";
             StateRest.Text = " ready to clean";
-            StateLine.Text = $"{found.Sum(r => r.Scan!.Count):N0} items across {programs} program{(programs == 1 ? "" : "s")}  ·  untick anything you want to keep  ·  close your browsers first for a full clean";
+            StateLine.Text = $"{found.Sum(r => r.Scan!.Count):N0} items across {programs} program{(programs == 1 ? "" : "s")}  ·  close your browsers first for a full clean";
         }
         CleanText.Text = total > 0 ? $"Clean {CleanScan.Format(total)}" : "Clean";
         CleanBtn.IsEnabled = found.Count > 0;
@@ -316,8 +321,9 @@ public partial class CleanerPage : UserControl
         if (_working) return;
         await LoadAsync();
         if (!_loaded) return;
-        var queue = Ticked.ToList();
-        if (queue.Count == 0) { StateSize.Text = ""; StateRest.Text = "Nothing is ticked"; StateLine.Text = "Tick at least one rule, or press “Tick every safe rule again”."; return; }
+        // shader caches are measured even when unticked, so you can see how big they are before deciding
+        var queue = _all.SelectMany(c => c.Rules).Where(r => r.Checked || r.Rule.ShaderCache).ToList();
+        if (!Ticked.Any()) { StateSize.Text = ""; StateRest.Text = "Nothing is ticked"; StateLine.Text = "Tick at least one rule, or press “Tick every safe rule again”."; return; }
 
         Begin("Scanning");
         _cts = new CancellationTokenSource();
@@ -332,7 +338,7 @@ public partial class CleanerPage : UserControl
             var progress = new Progress<(CleanRuleVM Rule, CleanScan Res)>(p =>
             {
                 p.Rule.IsBusy = false; p.Rule.Scan = p.Res;
-                done++; total += p.Res.Bytes;
+                done++; if (p.Rule.Checked) total += p.Res.Bytes;
                 StateSize.Text = CleanScan.Format(total);
                 StateRest.Text = " found so far";
                 StateLine.Text = $"Checked {done} of {queue.Count}: {p.Rule.Name}";

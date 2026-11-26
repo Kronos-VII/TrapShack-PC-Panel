@@ -17,6 +17,11 @@ public abstract class TweakAction
     public abstract void Apply();
     /// <param name="saved">What Capture returned before the tweak was applied, or null if unknown.</param>
     public abstract void Revert(string? saved);
+    /// <summary>
+    /// What the self-test compares before applying and after undoing: the setting itself, without things that change on
+    /// their own (whether a service happens to be running, whether a task is "Ready" or "Running" right now).
+    /// </summary>
+    public virtual string? TestState() => Capture();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -240,6 +245,8 @@ public sealed class ServiceAction : TweakAction
 
     public override string? Capture() => $"{CurrentMode()}|{(IsRunning() ? 1 : 0)}";
 
+    public override string? TestState() => CurrentMode();
+
     public override void Apply()
     {
         var r = Shell.Run("sc.exe", $"config {_name} start= {_target}", 30_000);
@@ -283,6 +290,9 @@ public sealed class ScheduledTaskAction : TweakAction
     public override bool IsApplied() => string.Equals(Caches.TaskState(_fullPath), "Disabled", StringComparison.OrdinalIgnoreCase);
 
     public override string? Capture() => Caches.TaskState(_fullPath);
+
+    public override string? TestState() => Caches.TaskState(_fullPath) is string s
+        ? (string.Equals(s, "Disabled", StringComparison.OrdinalIgnoreCase) ? "Disabled" : "Enabled") : null;
 
     public override void Apply()
     {
@@ -366,6 +376,9 @@ public sealed class CustomAction : TweakAction
     public override string? Capture() => _capture?.Invoke();
     public override void Apply() => _apply();
     public override void Revert(string? saved) => _revert?.Invoke(saved);
+
+    // code-based changes have no single value to read back; on/off (plus the saved original, when there is one) is the test
+    public override string? TestState() => (_isApplied() ? "on" : "off") + (_capture?.Invoke() is string c ? "|" + c : "");
 }
 
 // ---------------------------------------------------------------------------------------------

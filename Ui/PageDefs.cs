@@ -15,23 +15,23 @@ public static class PageDefs
     // Glyphs are Segoe Fluent Icons / Segoe MDL2 Assets code points.
     public static readonly List<PageDef> All = new()
     {
-        new("debloat", "Debloat", "Tweaks, advanced tweaks and toggles in one place. Safe changes first; the advanced ones explain themselves before you turn them on.", "\uE74D", Debloat),
+        new("debloat", "Debloat", "Turn off what you don't use. Every advanced switch explains itself first.", "\uE74D", Debloat),
         new("winapps", "Debloat apps", "Remove the apps Windows came with. Each one is labelled, and the ones Windows needs are locked.", "\uE7B8", Debloat),
         new("apps", "Apps", "Install game launchers, the runtimes games need, and everyday apps.", "\uE71D", Debloat),
 
         // Optimizations hub, in this order.
-        new("gaming", "Gaming & Performance", "Proven, low-risk changes for a snappier PC, matched to your CPU and graphics card.", "\uE7FC", Optimizations),
-        new("privacy", "Privacy & Security", "Telemetry-adjacent settings, Windows AI, app permissions and security options.", "\uE72E", Optimizations),
-        new("notifications", "Notifications", "Choose which Windows notifications and system nags you see.", "\uE7E7", Optimizations),
-        new("power", "Power", "Power plan and sleep behaviour, with separate plugged-in and on-battery values.", "\uE7E8", Optimizations),
+        new("gaming", "Gaming & Performance", "Low-risk changes for a snappier PC, matched to your hardware.", "\uE7FC", Optimizations),
+        new("privacy", "Privacy & Security", "Telemetry, Windows AI, app permissions and security options.", "\uE72E", Optimizations),
+        new("notifications", "Notifications", "Which Windows notifications and nags you see.", "\uE7E7", Optimizations),
+        new("power", "Power", "Power plan and sleep, plugged in and on battery.", "\uE7E8", Optimizations),
         new("sound", "Sound", "System sounds, startup sound and audio ducking.", "\uE767", Optimizations),
-        new("updates", "Update", "Take control of when and how Windows updates, without losing security patches.", "\uE895", Optimizations),
-        new("customize", "Customization", "Look and feel: sounds, notification extras, lock screen and accessibility shortcuts.", "\uE771", Optimizations),
+        new("updates", "Update", "When and how Windows updates, keeping security patches.", "\uE895", Optimizations),
+        new("customize", "Customization", "Look and feel, lock screen and accessibility shortcuts.", "\uE771", Optimizations),
     };
 
     /// <summary>Every Optimizations area on one page: the areas are listed on the left, gaming first, updates last.</summary>
     public static readonly PageDef OptimizationsPage = new("optimizations", "Optimizations",
-        "Every optimization in one place. Pick an area on the left; the settings picked for this PC are marked Recommended.", "\uE945", Optimizations);
+        "Every optimization in one place. Picks for this PC are marked Recommended.", "\uE945", Optimizations);
 
     /// <summary>The order of the areas in that list.</summary>
     public static readonly string[] AreaOrder = { "gaming", "privacy", "power", "sound", "notifications", "customize", "updates" };

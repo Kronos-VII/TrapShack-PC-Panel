@@ -109,7 +109,10 @@ public static partial class Catalog
             "Stop the Sticky Keys pop-up",
             "Pressing Shift five times no longer interrupts games.",
             Always,
-            L(CUs(@"Control Panel\Accessibility\StickyKeys", "Flags", "58", "510")),
+            // 506 = Windows' 510 with only the shortcut bit cleared, so Sticky Keys itself keeps its settings
+            L(new RegistryAction(RegistryHive.CurrentUser, @"Control Panel\Accessibility\StickyKeys", "Flags", "506", RegistryValueKind.String, "510",
+                // "on" means the shortcut bit (4) is clear, whatever the other Sticky Keys options are
+                matcher: v => v is string f && int.TryParse(f, out var n) && (n & 4) == 0)),
             detail: "Turns off the shortcut only. If you rely on Sticky Keys, leave this off; you can still enable it in Settings > Accessibility.");
 
         yield return Mk("custom.snap-window", Category.Customize, InputGroup,

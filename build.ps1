@@ -99,7 +99,7 @@ if ($running.Count -gt 0) {
 Step "Building TrapShack Tweak Utility (Release, single file). The first build downloads packages and takes a minute or two"
 & dotnet publish 'TrapShack Tweak Utility.csproj' -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true -nologo -o dist 2>&1 | Tee-Object -FilePath $log
+    -p:PublishReadyToRun=true -p:EnableCompressionInSingleFile=false -nologo -o dist 2>&1 | Tee-Object -FilePath $log
 if ($LASTEXITCODE -ne 0) {
     Fail "Build failed. The full output is saved in build.log. Send me that file and I'll fix it."
 }

@@ -36,6 +36,17 @@ public sealed class StateStore
         lock (_gate) { _data[key] = value; Save(); }
     }
 
+    /// <summary>Several keys at once with a single save (first run after an update can mark dozens).</summary>
+    public void SetMany(IEnumerable<string> keys, string value)
+    {
+        lock (_gate)
+        {
+            var changed = false;
+            foreach (var k in keys) if (!_data.TryGetValue(k, out var old) || old != value) { _data[k] = value; changed = true; }
+            if (changed) Save();
+        }
+    }
+
     public void Remove(string key)
     {
         lock (_gate) { if (_data.Remove(key)) Save(); }

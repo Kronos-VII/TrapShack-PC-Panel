@@ -81,14 +81,22 @@ public partial class MainWindow : Window, IPageHost
             HomeCleanSize.Text = CleanScan.Format(_settings.LastCleanBytes);
             HomeCleanText.Text = "From the last scan. Checking again now…";
         }
+        // the splash glow pulses until the app is ready (started here, in code, so it can be stopped for good)
+        SplashGlow.BeginAnimation(OpacityProperty, new DoubleAnimation(0.2, 0.6, TimeSpan.FromSeconds(1.4)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
         var cleanerScan = QuietCleanerScanAsync();
+        var probeCached = false;
         try
         {
             SetSplash("Detecting your hardware…", 0.14);
             await Task.Run(() => _sys = SystemInfo.Detect());
 
             SetSplash("Scanning apps, services and scheduled tasks…", 0.45);
-            await Task.Run(() => Parallel.Invoke(() => _sys.ProbeSlow(), Caches.RefreshTasks, Caches.RefreshAppx));
+            // The slow hardware checks only change with Windows itself: on the same build, start with last run's answers
+            // and re-read them quietly once the window is up.
+            probeCached = _settings.ProbeKey == _sys.ProbeKeyNow;
+            if (probeCached) _sys.UseCachedProbe(_settings.ProbeSsd, _settings.ProbeRecall, _settings.ProbeGpus);
+            await Task.Run(() => Parallel.Invoke(() => { if (!probeCached) _sys.ProbeSlow(); }, Caches.RefreshTasks, Caches.RefreshAppx));
+            if (!probeCached) SaveProbe();
 
             SetSplash($"Choosing settings for your {_sys.CpuBrand} processor and {GpuBrand}…", 0.74);
             var tweaks = await Task.Run(() => Catalog.Build());
@@ -110,15 +118,16 @@ public partial class MainWindow : Window, IPageHost
         }
 
         SetSplash("Ready", 1.0);
-        var wait = 2300 - (int)clock.ElapsedMilliseconds;   // keep the splash up long enough to feel deliberate
+        var wait = 350 - (int)clock.ElapsedMilliseconds;   // only long enough not to flash on a very fast PC
         if (wait > 0) await Task.Delay(wait);
 
         _loaded = true;
         StartSilentRecheck();
-        _ = AppsPanel.ScanAsync();
         PreloadSystemInfo();
+        _ = BackgroundStartAsync(probeCached);
         UtilitiesPanel.Init(this, _sys.IsLaptop);
         SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
+        UpdatePutBack();
         Navigate("home");
         FadeOutSplash();
 
@@ -161,10 +170,44 @@ public partial class MainWindow : Window, IPageHost
             new DoubleAnimation(progress, TimeSpan.FromMilliseconds(450)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
     }
 
+    /// <summary>
+    /// Work that isn't needed to show the app, started one after another once the window is up so the first seconds stay
+    /// smooth: the slow hardware re-check (when cached), the installed-apps scan, then the temperature sensors.
+    /// Opening Apps or Temperatures earlier simply starts that one straight away.
+    /// </summary>
+    async Task BackgroundStartAsync(bool probeCached)
+    {
+        try
+        {
+            await Task.Delay(1200);
+            _ = AppsPanel.ScanAsync();
+            if (probeCached)
+            {
+                var before = GpuBrand;
+                await Task.Run(() => _sys.ProbeSlow());
+                SaveProbe();
+                if (GpuBrand != before) SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
+            }
+            await Task.Delay(1500);
+            _ = MonitorPanel.Preload();
+        }
+        catch (Exception ex) { Log.Error("Background start: " + ex.Message); }
+    }
+
+    void SaveProbe()
+    {
+        _settings.ProbeKey = _sys.ProbeKeyNow;
+        _settings.ProbeSsd = _sys.SystemDriveIsSsd;
+        _settings.ProbeRecall = _sys.RecallFeatureState;
+        _settings.ProbeGpus = _sys.Gpus.ToList();
+        _settings.Save();
+    }
+
     void FadeOutSplash()
     {
-        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(500)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
-        fade.Completed += (_, _) => Splash.Visibility = Visibility.Collapsed;
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        // the splash glow pulses forever: stop it, or WPF keeps drawing frames for a hidden element all session
+        fade.Completed += (_, _) => { Splash.Visibility = Visibility.Collapsed; SplashGlow.BeginAnimation(OpacityProperty, null); };
         Splash.BeginAnimation(OpacityProperty, fade);
     }
 
@@ -372,6 +415,7 @@ public partial class MainWindow : Window, IPageHost
         PageCrumb.Cursor = area ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
         PageTitle.Text = page.Title;
         PageSubtitle.Text = page.Subtitle;
+        PageSubtitle.ToolTip = page.Subtitle;
         _cat = startAt;
         SearchBox.Text = "";
         TweakScroll.ScrollToTop();
@@ -526,7 +570,7 @@ public partial class MainWindow : Window, IPageHost
         var key = _page.Key;
         var pageItems = PageItems(_page);
         _searching = q.Length > 0;
-        QuickBtnText.Text = key == "debloat" ? "Quick select" : "Quick actions";
+        QuickBtnText.Text = "Quick actions";
 
         _rail = BuildRail(key, pageItems);
         if (_cat == null || _rail.All(r => r.Key != _cat)) _cat = _rail.FirstOrDefault()?.Key;
@@ -741,6 +785,7 @@ public partial class MainWindow : Window, IPageHost
     void RefreshViews()
     {
         UpdateNavCounts();
+        UpdatePutBack();
         if (_page != null) { UpdatePageProgress(); RefreshListPage(); }
         else if (_hub) RefreshHub();
         else RefreshHome();
@@ -749,6 +794,58 @@ public partial class MainWindow : Window, IPageHost
     // =============================================================================================
     // Home
     // =============================================================================================
+
+    // ---- Settings Windows changed back -----------------------------------------------------------
+    // A setting TrapShack applied, that was seen working, and now reads as off again was changed outside TrapShack,
+    // nearly always by a Windows update. Shown as one quiet card on Home, never as a pop-up.
+    // "Seen working" matters: a setting Windows refused in the first place is reported when it is applied, not here.
+    const string SeenOnKey = "app.seen-on/";
+    List<TweakVM> _putBack = new();
+
+    void UpdatePutBack()
+    {
+        if (_vms == null || _vms.Count == 0 || _busy) return;
+        var found = new List<TweakVM>();
+        var newlySeen = new List<string>();
+        foreach (var v in _vms)
+        {
+            if (v.T.OneShot) continue;
+            var seenKey = SeenOnKey + v.T.Id;
+            if (v.IsOn)
+            {
+                if (!_engine.State.Has(seenKey) && _engine.HasBackup(v.T)) newlySeen.Add(seenKey);
+                continue;
+            }
+            if (!_engine.State.Has(seenKey)) continue;
+            if (!_engine.HasBackup(v.T)) { _engine.State.Remove(seenKey); continue; }   // switched off in TrapShack: nothing to report
+            if (v.V.Fit == Fit.Unavailable) continue;
+            // a setting that shares its Windows value with another one that is on was switched off on purpose
+            if (_clash.TryGetValue(v.T.Id, out var cl) && cl.Any(o => o.IsOn)) continue;
+            if (v.T.ChoiceGroup != null && _vms.Any(o => o != v && o.T.ChoiceGroup == v.T.ChoiceGroup && o.IsOn)) continue;
+            found.Add(v);
+        }
+        if (newlySeen.Count > 0) _engine.State.SetMany(newlySeen, "1");
+        _putBack = found;
+        PutBackCard.Visibility = found.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (found.Count == 0) return;
+        PutBackTitle.Text = found.Count == 1 ? "Windows changed one of your settings back" : $"Windows changed {found.Count} of your settings back";
+        PutBackText.Text = string.Join(", ", found.Take(2).Select(v => v.T.Title)) + (found.Count > 2 ? $" and {found.Count - 2} more" : "") +
+                           "  ·  usually after a Windows update";
+        PutBackText.ToolTip = string.Join("\n", found.Select(v => v.T.Title));
+    }
+
+    async void OnPutBack(object sender, RoutedEventArgs e)
+    {
+        if (_putBack.Count == 0) return;
+        await ApplyRecommendedAsync(null, _putBack.ToList(), putBack: true);
+    }
+
+    /// <summary>Leaves them as Windows has them now; the card only comes back for a setting that is switched on again and later reset.</summary>
+    void OnKeepAsIs(object sender, RoutedEventArgs e)
+    {
+        foreach (var v in _putBack) _engine.State.Remove(SeenOnKey + v.T.Id);
+        UpdatePutBack();
+    }
 
     /// <summary>The Home page is deliberately small: who this PC is, how far the recommended set has got, and the two actions.</summary>
     void RefreshHome()
@@ -1021,7 +1118,7 @@ public partial class MainWindow : Window, IPageHost
     void OnUndoPage(object sender, RoutedEventArgs e) { QuickPop.IsOpen = false; _ = UndoAsync(CurrentScope(), toDefaults: true); }
     void OnUndoAll(object sender, RoutedEventArgs e) => _ = UndoAsync(null, toDefaults: false);
 
-    async Task ApplyRecommendedAsync(Func<TweakVM, bool>? scope, List<TweakVM>? profile = null)
+    async Task ApplyRecommendedAsync(Func<TweakVM, bool>? scope, List<TweakVM>? profile = null, bool putBack = false)
     {
         if (_busy) return;
 
@@ -1038,8 +1135,11 @@ public partial class MainWindow : Window, IPageHost
         var lines = string.Join("\n", todo.Take(14).Select(v => "•  " + v.T.Title));
         if (todo.Count > 14) lines += $"\n…and {todo.Count - 14} more";
 
-        if (!Dialogs.Confirm(this, profile != null ? "Apply this profile" : "Apply recommended settings",
-                (profile != null
+        if (!Dialogs.Confirm(this, putBack ? "Turn your settings back on" : profile != null ? "Apply this profile" : "Apply recommended settings",
+                (putBack
+                    ? $"Windows changed {(todo.Count == 1 ? "this setting" : $"these {todo.Count} settings")} back after TrapShack set {(todo.Count == 1 ? "it" : "them")}. " +
+                      $"This usually happens after a Windows update. TrapShack will set {(todo.Count == 1 ? "it" : "them")} again:\n\n{lines}\n\n"
+                    : profile != null
                     ? $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} from the profile:\n\n{lines}\n\n"
                     : $"TrapShack will apply {todo.Count} setting{(todo.Count == 1 ? "" : "s")} chosen for this PC " +
                       $"({_sys.OsName}, {_sys.CpuBrand} CPU, {GpuBrand}):\n\n{lines}\n\n") +
@@ -1051,7 +1151,7 @@ public partial class MainWindow : Window, IPageHost
         if (!_settings.RestorePointAsked) { _settings.RestorePointAsked = true; _settings.Save(); }   // this run makes one itself
         var steps = new List<(string, string)> { ("Create a restore point", "Windows System Restore") };
         steps.AddRange(todo.Select(v => (v.T.Title, v.T.Summary)));
-        Apply.Begin("Applying", "Applying recommended settings", steps, true);
+        Apply.Begin("Applying", putBack ? "Turning your settings back on" : "Applying recommended settings", steps, true);
 
         Apply.StartStep(0);
         var (ok, message) = await Task.Run(() => RestorePoint.Create());
@@ -1118,7 +1218,7 @@ public partial class MainWindow : Window, IPageHost
         await Apply.WaitClosedAsync();
         _busy = false;
         RefreshViews();
-        SetStatus($"Applied {good} of {todo.Count} recommended settings");
+        SetStatus(putBack ? $"Turned {good} of {todo.Count} settings back on" : $"Applied {good} of {todo.Count} recommended settings");
         QueueRestartPrompt();
     }
 
@@ -1227,9 +1327,18 @@ public partial class MainWindow : Window, IPageHost
     // Window chrome
     // =============================================================================================
 
-    void ShowBusy(string text) { BusyText.Text = text; BusyOverlay.Visibility = Visibility.Visible; }
+    void ShowBusy(string text)
+    {
+        BusyText.Text = text;
+        BusyOverlay.Visibility = Visibility.Visible;
+        BusySlide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-130, 520, TimeSpan.FromSeconds(1.3)) { RepeatBehavior = RepeatBehavior.Forever });
+    }
     void SetBusyText(string text) => BusyText.Text = text;
-    void HideBusy() => BusyOverlay.Visibility = Visibility.Collapsed;
+    void HideBusy()
+    {
+        BusyOverlay.Visibility = Visibility.Collapsed;
+        BusySlide.BeginAnimation(TranslateTransform.XProperty, null);   // a hidden endless animation still costs a frame every 16 ms
+    }
     DispatcherTimer? _statusTimer;
 
     /// <summary>A short message at the bottom of the window (what was just applied). It disappears by itself after a few seconds.</summary>
@@ -1502,8 +1611,7 @@ public partial class MainWindow : Window, IPageHost
     void PreloadSystemInfo()
     {
         _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
-        MonitorPanel.Init(_sys);
-        _ = MonitorPanel.Preload();   // the sensor driver takes a moment: start it now so Temperatures opens with figures
+        MonitorPanel.Init(_sys);   // the sensors themselves start a few seconds later (BackgroundStartAsync)
     }
 
     async void ShowSystem()
@@ -1513,9 +1621,84 @@ public partial class MainWindow : Window, IPageHost
 
         // Details were read in the background at startup, so they show at once; sensors were started then too.
         _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
-        if (_infoTask.IsCompleted) { try { InfoList.ItemsSource = _infoTask.Result; } catch { } }
-        try { InfoList.ItemsSource = await _infoTask; }
+        if (_infoTask.IsCompleted) { try { InfoList.ItemsSource = _info = _infoTask.Result; } catch { } }
+        try { InfoList.ItemsSource = _info = await _infoTask; }
         catch (Exception ex) { Log.Error("System info failed: " + ex.Message); }
+        CopySpecsBtn.IsEnabled = _info is { Count: > 1 };
+    }
+
+    // ---- Copy specs ---------------------------------------------------------------------------------
+    List<InfoSection>? _info;
+    int _copyStamp;
+
+    async void OnCopySpecs(object sender, RoutedEventArgs e)
+    {
+        if (_info == null) return;
+        var text = SpecsText(_info);
+        var ok = false;
+        for (var i = 0; i < 5 && !ok; i++)
+        {
+            // the clipboard can be briefly held by another app: try again a moment later
+            try { Clipboard.SetDataObject(text, true); ok = true; }
+            catch (System.Runtime.InteropServices.ExternalException) { await Task.Delay(80); }
+        }
+        CopySpecsIcon.Text = ok ? "\uE73E" : "\uE783";
+        CopySpecsText.Text = ok ? "Copied" : "Couldn't copy";
+        var stamp = ++_copyStamp;
+        await Task.Delay(2000);
+        if (stamp != _copyStamp) return;
+        CopySpecsIcon.Text = "\uE8C8";
+        CopySpecsText.Text = "Copy specs";
+    }
+
+    /// <summary>
+    /// The PC's specs as a short block for Discord (a code block keeps the columns lined up there).
+    /// Leaves out the PC name, addresses and DNS: only what helps someone answer a question about the hardware.
+    /// </summary>
+    string SpecsText(List<InfoSection> info)
+    {
+        InfoSection? Sec(string title) => info.FirstOrDefault(x => x.Title == title);
+        static string Row(InfoSection? sec, string label) => sec?.Rows.FirstOrDefault(r => r.Label == label)?.Value ?? "";
+        static string Join(params string[] parts) => string.Join(", ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+        var lines = new List<(string Label, string Value)>();
+        lines.Add(("OS", Join($"{_sys.OsName} {_sys.DisplayVersion}".Trim(), _sys.Build > 0 ? $"build {_sys.Build}.{_sys.Ubr}" : "")));
+
+        var cpu = Sec("Processor");
+        lines.Add(("CPU", Join(cpu?.Sub ?? _sys.Cpu, Row(cpu, "Cores").Replace("  ·  ", " / "))));
+
+        var gpus = info.Where(x => x.Title.StartsWith("Graphics")).ToList();
+        foreach (var g in gpus)
+            lines.Add((gpus.Count > 1 ? "GPU " + (gpus.IndexOf(g) + 1) : "GPU", Join(g.Sub, Row(g, "VRAM"), Row(g, "Driver").Length > 0 ? "driver " + Row(g, "Driver") : "")));
+
+        var ram = Sec("Memory");
+        var ramDetail = Join(Row(ram, "Modules"), Row(ram, "Speed"), Row(ram, "Maker"));
+        lines.Add(("RAM", $"{Math.Round(_sys.RamGb):0} GB" + (ramDetail.Length > 0 ? $" ({ramDetail})" : "")));
+
+        var board = Sec("Motherboard");
+        if (board != null)
+        {
+            var maker = System.Text.RegularExpressions.Regex.Match(Row(board, "Maker"), @"^[\p{L}\p{N}]+").Value;
+            var name = board.Sub.StartsWith(maker, StringComparison.OrdinalIgnoreCase) ? board.Sub : $"{maker} {board.Sub}".Trim();
+            lines.Add(("Board", Join(name, Row(board, "BIOS").Length > 0 ? "BIOS " + Row(board, "BIOS") : "")));
+        }
+
+        var disks = Sec("Storage")?.Rows ?? new List<InfoRow>();
+        for (var i = 0; i < disks.Count; i++)
+        {
+            var parts = disks[i].Value.Split('\n');
+            // "Healthy" is the normal case; anything else is worth passing on
+            var facts = parts.Length > 1 ? string.Join(", ", parts[1].Split("  ·  ").Where(f => f != "Healthy")) : "";
+            lines.Add((i == 0 ? "Storage" : "", parts[0] + (facts.Length > 0 ? $" ({facts})" : "")));
+        }
+
+        var first = gpus.FirstOrDefault();
+        if (first != null && Row(first, "Display").Length > 0)
+            lines.Add(("Display", Row(first, "Display") + (Row(first, "Refresh rate").Length > 0 ? " at " + Row(first, "Refresh rate") : "")));
+
+        var width = lines.Max(l => l.Label.Length) + 2;
+        var body = string.Join("\n", lines.Where(l => l.Value.Length > 0).Select(l => l.Label.PadRight(width) + l.Value));
+        return "```\n" + body + "\n```";
     }
 
     void FillSystemHeader()
@@ -1739,6 +1922,9 @@ public partial class MainWindow : Window, IPageHost
     {
         // Never while something is being changed, and never more than about once every 20 seconds.
         if (_busy || _rechecking || !_loaded || _vms.Count == 0) return;
+        // Nothing at all while the app is in the background (a game has focus, or it is minimised): it re-checks the
+        // moment you switch back to it.
+        if (!IsActive || WindowState == WindowState.Minimized) return;
         if ((DateTime.Now - _lastCheck).TotalSeconds < 20) return;
         _rechecking = true;
         try

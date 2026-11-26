@@ -69,12 +69,17 @@ public static class WingetService
         {
             var tokens = ReadWingetTokens();
             var names = ReadUninstallNames();
+            var storeApps = new List<AppDef>();
             foreach (var a in AppCatalog.All)
             {
                 if (IsPresent(a, tokens, names)) { found.Add(a.Id); continue; }
                 // Store apps are often missing from the bulk list, so ask about them directly
-                if (Available && Regex.IsMatch(a.Winget, @"^9[A-Z0-9]{11}$") && IsInstalled(a)) found.Add(a.Id);
+                if (Available && Regex.IsMatch(a.Winget, @"^9[A-Z0-9]{11}$")) storeApps.Add(a);
             }
+            // a few at a time instead of one after another: each check is its own winget run
+            var extra = new System.Collections.Concurrent.ConcurrentBag<string>();
+            Parallel.ForEach(storeApps, new ParallelOptions { MaxDegreeOfParallelism = 3 }, a => { if (IsInstalled(a)) extra.Add(a.Id); });
+            foreach (var id in extra) found.Add(id);
         }
         catch (Exception ex) { Log.Error("Installed-app scan failed: " + ex.Message); }
         return found;

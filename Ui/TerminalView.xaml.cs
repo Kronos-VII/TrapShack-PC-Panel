@@ -55,8 +55,14 @@ public partial class TerminalView : UserControl
         {
             Lines.ApplyTemplate();
             _scroller = Lines.Template.FindName("Scroller", Lines) as ScrollViewer;
-            Caret.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(600))
-            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+        };
+        // the blinking caret only runs while the terminal can be seen (a hidden endless animation still costs frames)
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+                Caret.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(600))
+                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+            else Caret.BeginAnimation(OpacityProperty, null);
         };
     }
 

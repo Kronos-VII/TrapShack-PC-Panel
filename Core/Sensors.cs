@@ -12,13 +12,17 @@ public sealed class Sensors : IDisposable
 {
     Computer? _pc;
     public string? Problem { get; private set; }
+    /// <summary>The graphics cards the sensors found, in the same order as "GPU 1", "GPU 2".</summary>
+    public List<string> GpuNames { get; private set; } = new();
 
     public bool Start()
     {
         try
         {
-            _pc = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = true, IsMotherboardEnabled = false, IsStorageEnabled = false };
+            _pc = new Computer { IsCpuEnabled = true, IsGpuEnabled = true, IsMemoryEnabled = false, IsMotherboardEnabled = false, IsStorageEnabled = false };
             _pc.Open();
+            GpuNames = _pc.Hardware.Where(h => h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
+                                   .Select(h => h.Name).ToList();
             return true;
         }
         catch (Exception ex)
@@ -42,17 +46,8 @@ public sealed class Sensors : IDisposable
                 hw.Update();
                 foreach (var sub in hw.SubHardware) sub.Update();
 
-                if (hw.HardwareType == HardwareType.Memory)
-                {
-                    var used = hw.Sensors.FirstOrDefault(x => x.SensorType == SensorType.Data && x.Name == "Memory Used")?.Value;
-                    var free = hw.Sensors.FirstOrDefault(x => x.SensorType == SensorType.Data && x.Name == "Memory Available")?.Value;
-                    var pct = hw.Sensors.FirstOrDefault(x => x.SensorType == SensorType.Load && x.Name == "Memory")?.Value;
-                    if (used.HasValue && free.HasValue)
-                        list.Add(new("RAM used", $"{used.Value:0.0} / {used.Value + free.Value:0.0} GB", pct >= 90, pct ?? used.Value / (used.Value + free.Value) * 100));
-                    else if (pct.HasValue)
-                        list.Add(new("RAM used", $"{pct.Value:0} %", pct >= 90, pct.Value));
-                    continue;
-                }
+                // memory is read straight from Windows below: the sensor library's figures include the page file
+                if (hw.HardwareType == HardwareType.Memory) continue;
 
                 var isGpu = gpus.Contains(hw);
                 var isCpu = hw.HardwareType == HardwareType.Cpu;
@@ -91,8 +86,29 @@ public sealed class Sensors : IDisposable
             }
         }
         catch (Exception ex) { Log.Error("Sensor read failed: " + ex.Message); }
+
+        // physical memory, the same figure Task Manager and the System info page show (GiB, as Windows counts it)
+        var mem = new MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MEMORYSTATUSEX>() };
+        if (GlobalMemoryStatusEx(ref mem) && mem.ullTotalPhys > 0)
+        {
+            const double gib = 1024.0 * 1024 * 1024;
+            var total = mem.ullTotalPhys / gib;
+            var used = (mem.ullTotalPhys - mem.ullAvailPhys) / gib;
+            var pct = used / total * 100;
+            list.Add(new("RAM used", $"{used:0.0} / {total:0.0} GB", pct >= 90, pct));
+        }
         return list;
     }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct MEMORYSTATUSEX
+    {
+        public uint dwLength, dwMemoryLoad;
+        public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buffer);
 
     public void Dispose() { try { _pc?.Close(); } catch { } _pc = null; }
 }

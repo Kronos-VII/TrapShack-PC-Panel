@@ -29,19 +29,4 @@ public static partial class Catalog
             confirm: "OneDrive will be uninstalled from this PC. Files stored in the cloud stay safe online, but anything that exists only " +
                      "in your OneDrive folder should be copied somewhere else first.");
     }
-
-    static IEnumerable<TweakAction> ContentDelivery()
-    {
-        const string path = @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
-        var names = new[]
-        {
-            "ContentDeliveryAllowed", "FeatureManagementEnabled", "OemPreInstalledAppsEnabled",
-            "PreInstalledAppsEnabled", "PreInstalledAppsEverEnabled", "RotatingLockScreenOverlayEnabled",
-            "SilentInstalledAppsEnabled", "SoftLandingEnabled", "SystemPaneSuggestionsEnabled",
-            "SubscribedContent-310093Enabled", "SubscribedContent-338387Enabled", "SubscribedContent-338388Enabled",
-            "SubscribedContent-338389Enabled", "SubscribedContent-338393Enabled", "SubscribedContent-353694Enabled",
-            "SubscribedContent-353696Enabled", "SubscribedContent-353698Enabled",
-        };
-        foreach (var n in names) yield return CU(path, n, 0, 1);
-    }
 }

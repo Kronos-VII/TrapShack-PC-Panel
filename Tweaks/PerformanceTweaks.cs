@@ -70,9 +70,9 @@ public static partial class Catalog
             L(new RegistryAction(
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB",
                 () => (int)Math.Min((ulong)int.MaxValue, SystemInfo.Current.RamKb + 1_048_576UL),
-                RegistryValueKind.DWord, null,
+                RegistryValueKind.DWord, 3670016,   // Windows' own value: 0x380000 KB (3.5 GB)
                 matcher: v => v is int i && i >= 0 && (ulong)i >= SystemInfo.Current.RamKb)),
-            detail: "Windows splits services into separate processes only when RAM is above SvcHostSplitThresholdInKB (380000 KB by default). " +
+            detail: "Windows splits services into separate processes only when RAM is above SvcHostSplitThresholdInKB (3.5 GB by default). " +
                     "Setting it to just above your installed RAM merges them again, which means a tidier Task Manager. " +
                     "It does not make games faster. Takes effect after a restart.",
             restart: true);

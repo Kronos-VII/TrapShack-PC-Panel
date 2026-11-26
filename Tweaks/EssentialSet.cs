@@ -16,7 +16,10 @@ public static partial class Catalog
         Registry.CurrentUser.DeleteSubKeyTree(ExplorerBagMru, false);
     }
 
-    static int? DefenderSampleConsent()
+    /// <summary>Asked through PowerShell, so the answer is kept for a few minutes (see SlowCheck).</summary>
+    static int? DefenderSampleConsent() => SlowCheck.Get<int?>("defender.samples", ReadDefenderSampleConsent);
+
+    static int? ReadDefenderSampleConsent()
     {
         try
         {
@@ -82,8 +85,8 @@ public static partial class Catalog
               new CustomAction(
                 "Windows Defender  →  automatic sample submission turned off (restore sets it back)",
                 isApplied: () => DefenderSampleConsent() == 2,
-                apply: () => Shell.PowerShell("Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction Stop", 60_000),
-                revert: saved => Shell.PowerShell($"Set-MpPreference -SubmitSamplesConsent {(int.TryParse(saved, out var n) ? n : 1)} -ErrorAction Stop", 60_000),
+                apply: () => { SlowCheck.Forget("defender.samples"); Shell.PowerShell("Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction Stop", 60_000); },
+                revert: saved => { SlowCheck.Forget("defender.samples"); Shell.PowerShell($"Set-MpPreference -SubmitSamplesConsent {(int.TryParse(saved, out var n) ? n : 1)} -ErrorAction Stop", 60_000); },
                 capture: () => DefenderSampleConsent()?.ToString(),
                 applicable: () => DefenderSampleConsent() != null)),
             detail: "Sets the diagnostic data policy to its lowest level, turns off tailored experiences, advertising ID, feedback prompts, handwriting and typing data collection and Defender automatic sample submission, and disables the telemetry and error reporting services. Windows Update keeps working. Restore removes each setting.");

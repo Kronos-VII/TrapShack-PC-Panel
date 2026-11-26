@@ -1,0 +1,47 @@
+# Builds TrapShack Tweak Utility on a GitHub Windows machine every time you push, then runs the self-test there.
+# The machine is thrown away afterwards, so nothing here can affect any real PC.
+# Results: GitHub > your repository > Actions > the latest run > "TrapShack build and self-test" at the bottom.
+name: Build and self-test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # the same build as build.bat: if this step fails, the code has an error and the log says where
+      - name: Build
+        shell: pwsh
+        run: >
+          dotnet publish 'TrapShack Tweak Utility.csproj' -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishReadyToRun=true -p:EnableCompressionInSingleFile=false -nologo -o dist
+
+      # this machine runs Windows Server, so many Windows 11 settings show as "not for this PC";
+      # the Sandbox test on Windows 11 is the main one, this is a second check
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE 'selftest'
+          $p = Start-Process -FilePath 'dist\TrapShackTweakUtility.exe' -ArgumentList '--selftest','--headless','--out',"`"$out`"" -Wait -PassThru
+          $report = Join-Path $out 'TrapShack self-test.txt'
+          if (Test-Path $report) { Get-Content $report -TotalCount 60 } else { Write-Host '::error::The self-test wrote no report.' }
+          if ($p.ExitCode -ne 0) { Write-Host '::warning::The self-test found something to fix. Download the report below.' }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TrapShack build and self-test
+          retention-days: 7
+          path: |
+            dist/TrapShackTweakUtility.exe
+            selftest/
