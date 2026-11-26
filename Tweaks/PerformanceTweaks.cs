@@ -18,14 +18,15 @@ public static partial class Catalog
         yield return Mk("perf.visual-effects", Category.Performance, Responsiveness,
             "Visual effects: best performance",
             "Turns off animations, shadows and transparency. Text stays smooth (ClearType is kept on).",
-            Always,
+            // the Optimizations page has each visual effect as its own switch, recommended one by one; this turns all of them off
+            Sometimes,
             L(CU(visualKey, "VisualFXSetting", 3, 0),
               new RegistryAction(RegistryHive.CurrentUser, desktopKey, "UserPreferencesMask",
                   new byte[] { 0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00 }, RegistryValueKind.Binary,
                   new byte[] { 0x9E, 0x3E, 0x07, 0x80, 0x12, 0x00, 0x00, 0x00 }),
               CUs(@"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0", "1"),
               CUs(desktopKey, "DragFullWindows", "0", "1"),
-              CUs(desktopKey, "MenuShowDelay", "200", "400"),
+              CUs(desktopKey, "MenuShowDelay", "0", "400"),
               CUs(@"Control Panel\Keyboard", "KeyboardDelay", "0", "1"),
               CU(advancedKey, "TaskbarMn", 0, 1),
               CU(advancedKey, "TaskbarAnimations", 0, 1),
@@ -84,7 +85,7 @@ public static partial class Catalog
             "Turn off background game recording",
             "Stops Windows constantly recording in the background for \"record that\". The Game Bar overlay still works.",
             s => s.IsAmdCpu && s.HasX3D
-                ? Verdict.Opt("Your Ryzen X3D chip uses Xbox Game Bar to recognise games. This only stops recording, but if games run oddly, switch it back on.")
+                ? Verdict.Rec("Only background recording stops. Game Bar itself, which your Ryzen X3D chip uses to recognise games, keeps working.")
                 : Verdict.Rec(),
             L(CU(@"System\GameConfigStore", "GameDVR_Enabled", 0, 1),
               CU(@"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0, 1),

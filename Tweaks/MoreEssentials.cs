@@ -54,7 +54,7 @@ public static partial class Catalog
             s => s.SystemDriveIsSsd switch
             {
                 false => Verdict.Warn("On a hard disk SysMain makes app launches faster. Leave it on."),
-                true => Verdict.Opt("On an SSD the benefit of SysMain is small, so this is safe if you want fewer background disk reads."),
+                true => Verdict.Rec("On an SSD the benefit of SysMain is small, so this saves background disk reads."),
                 _ => Verdict.Opt(),
             },
             L(new ServiceAction("SysMain", ServiceAction.Disabled, "auto")),

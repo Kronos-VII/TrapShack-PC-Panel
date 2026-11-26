@@ -25,6 +25,12 @@ public static class FullTest
     /// <summary>One line in a report. Outcome: PASS, FAIL, SKIP, N/A or INFO.</summary>
     public sealed record Row(string Part, string Name, string Outcome, string? Detail = null);
 
+    static void SetLm(string path, string name, int value)
+    {
+        using var k = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64).CreateSubKey(path, true);
+        k.SetValue(name, value, Microsoft.Win32.RegistryValueKind.DWord);
+    }
+
     // ============================================================================================ reports
     static string Report(string title, string where, DateTime started, bool finished, IEnumerable<string> notes, List<Row> rows)
     {
@@ -299,6 +305,50 @@ public static class FullTest
                 missing.Count == 0 ? $"all {targets.Count} shortcuts point at something that exists" : "not found here: " + string.Join(", ", missing)));
         });
 
+        Step("Repair harmful tweaks", () =>
+        {
+            // 1. a clean Windows: whatever it reports here is listed (it should be little or nothing)
+            var before = TweakDoctor.Scan();
+            Add(new(F, "Repair harmful tweaks: scan of a clean Windows", "PASS",
+                before.Count == 0 ? "found nothing (correct: a clean Windows has no harmful tweaks)"
+                                  : $"found {before.Count}: " + string.Join("; ", before.Select(f => f.Title))));
+
+            // 2. plant common harmful tweaks, then it must find and repair every one
+            const string mm = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management";
+            var planted = new List<(string Id, Action Plant)>
+            {
+                ("reg.gpu.tdr", () => SetLm(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrLevel", 0)),
+                ("reg.mem.largecache", () => SetLm(mm, "LargeSystemCache", 1)),
+                ("wu.fake-server", () => { SetLm(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "UseWUServer", 1); }),
+                ("reg.store.removed", () => SetLm(@"SOFTWARE\Policies\Microsoft\WindowsStore", "RemoveWindowsStore", 1)),
+                ("svc.W32Time", () => SetLm(@"SYSTEM\CurrentControlSet\Services\W32Time", "Start", 4)),
+                ("boot.useplatformclock", () => Shell.Run("bcdedit.exe", "/set {current} useplatformclock true", 30_000)),
+            };
+            var plantedIds = new List<string>();
+            foreach (var (id, plant) in planted)
+            {
+                if (before.Any(f => f.Id == id)) continue;
+                try { plant(); plantedIds.Add(id); } catch (Exception ex) { Add(new(F, "Repair harmful tweaks: plant " + id, "SKIP", ex.Message)); }
+            }
+            var found = TweakDoctor.Scan();
+            var missed = plantedIds.Where(id => found.All(f => f.Id != id)).ToList();
+            // a boot setting the Sandbox's boot store refuses to hold isn't a fault of the tool
+            if (missed.Remove("boot.useplatformclock")) Add(new(F, "Repair harmful tweaks: boot setting", "SKIP", "the Sandbox didn't keep the planted boot setting"));
+            Add(new(F, "Repair harmful tweaks: finds planted problems", missed.Count == 0 ? "PASS" : "FAIL",
+                missed.Count == 0 ? $"found all {plantedIds.Count} planted" : "missed: " + string.Join(", ", missed)));
+
+            var bad = new List<string>();
+            foreach (var f in found.Where(f => plantedIds.Contains(f.Id)))
+            {
+                try { f.Repair(); if (f.StillBad()) bad.Add(f.Id + ": still set afterwards"); }
+                catch (Exception ex) { bad.Add(f.Id + ": " + ex.Message); }
+            }
+            var after = TweakDoctor.Scan().Where(f => plantedIds.Contains(f.Id)).Select(f => f.Id).ToList();
+            bad.AddRange(after.Select(id => id + ": found again after repair"));
+            Add(new(F, "Repair harmful tweaks: repairs to Windows' default", bad.Count == 0 ? "PASS" : "FAIL",
+                bad.Count == 0 ? "every planted problem repaired and gone on a fresh scan" : string.Join("\n", bad.Distinct())));
+        });
+
         // ---------------------------------------------------------------- utilities
         const string U = "Utilities (run in the Sandbox)";
         var longRepairs = new HashSet<string> { "repair-system", "sfc", "component-cleanup" };
@@ -314,7 +364,7 @@ public static class FullTest
             {
                 var missing = new[] { "cleanmgr.exe", "dism.exe" }.Where(f => FindProgram(f) == null).ToList();
                 Add(new(O, dc.Title, missing.Count == 0 ? "SKIP" : "FAIL", missing.Count == 0
-                    ? "not run here: after Disk Cleanup it runs DISM /StartComponentCleanup /ResetBase, the same 10 to 30 minute Windows repair as \"Clean up old update files\", which the Sandbox's Windows can't do (the last run gave up after 20 minutes). Both programs are present."
+                    ? "not run here: after Disk Cleanup it runs DISM /StartComponentCleanup /ResetBase in the background, the same 10 to 40 minute Windows clean-up as \"Clean up old update files\", which the Sandbox's Windows can't finish. Both programs are present."
                     : "program not found: " + string.Join(", ", missing)));
             });
         foreach (var id in new[] { "extra.delete-temp" })
@@ -639,7 +689,14 @@ public static class FullTest
             Try(P, "Apps page: winget and installed apps", () =>
             {
                 var found = WingetService.DetectInstalled();
-                return (WingetService.Available ? "PASS" : "FAIL", (WingetService.Available ? "winget found" : "winget NOT found (installs won't work)") + $"; {found.Count} of {AppCatalog.All.Length} apps detected as installed");
+                return (WingetService.Available ? "PASS" : "FAIL", (WingetService.Available ? "winget found" : "winget NOT found (installs won't work)") + $"; {found.Count} of {AppCatalog.All.Length} apps detected as installed: " +
+                    string.Join(", ", AppCatalog.All.Where(a => found.Contains(a.Id)).Select(a => a.Name)));
+            });
+            Try(P, "Utilities: Repair harmful tweaks (scan only, nothing repaired)", () =>
+            {
+                var found = TweakDoctor.Scan();
+                return ("PASS", found.Count == 0 ? "found nothing harmful on this PC"
+                    : $"would offer to repair {found.Count}: " + string.Join("; ", found.Select(f => f.Title)) + " (nothing was changed)");
             });
             Try(P, "Debloat apps list", () =>
             {

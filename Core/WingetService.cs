@@ -90,7 +90,8 @@ public static class WingetService
     {
         try
         {
-            if (PresentByFiles(a) || PresentByRegistry(a, ReadUninstallNames())) return true;
+            var names = ReadUninstallNames();
+            if (PresentByFiles(a) || PresentByRegistry(a, names) || AppDetect.Present(a, names)) return true;
             if (!Available) return false;
             var r = Shell.Run(Exe!, $"list --id {a.Winget} -e --accept-source-agreements --disable-interactivity", 60_000);
             return r.Ok && r.Output.IndexOf(a.Winget, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -102,6 +103,7 @@ public static class WingetService
     {
         if (PresentByFiles(a)) return true;
         if (PresentByRegistry(a, names)) return true;
+        if (AppDetect.Present(a, names)) return true;
         if (tokens == null) return false;
         if (tokens.Contains(a.Winget)) return true;
         // winget shortens very long ids with an ellipsis when its output is narrow.
@@ -155,8 +157,14 @@ public static class WingetService
         {
             try { var x = Environment.ExpandEnvironmentVariables(p); if (File.Exists(x) && x.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return x; } catch { }
         }
-        if (string.IsNullOrEmpty(a.Reg)) return null;
-        var rx = new Regex("^" + Regex.Replace(Regex.Escape(a.Reg), @"\\\{(arch|version)}", ".*") + "$", RegexOptions.IgnoreCase);
+        var exe = AppDetect.Exe(a);
+        if (exe != null) return exe;
+        Regex rx;
+        if (!string.IsNullOrEmpty(a.Reg))
+            rx = new Regex("^" + Regex.Replace(Regex.Escape(a.Reg), @"\\\{(arch|version)}", ".*") + "$", RegexOptions.IgnoreCase);
+        else if (AppDetect.Hints.TryGetValue(a.Id, out var hint))
+            rx = hint.Names;
+        else return null;
         foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
             foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
@@ -210,6 +218,7 @@ public static class WingetService
         Scan(RegistryHive.LocalMachine, RegistryView.Registry64);
         Scan(RegistryHive.LocalMachine, RegistryView.Registry32);
         Scan(RegistryHive.CurrentUser, RegistryView.Registry64);
+        Scan(RegistryHive.CurrentUser, RegistryView.Registry32);
         return list;
     }
 

@@ -1,0 +1,94 @@
+[33mcommit 993292c19c376fc248fd304f4eb9fd09aa89c2c6[m[33m ([m[1;31morigin/main[m[33m)[m
+Author: JaidenGoode <jaiden_goode@icloud.com>
+Date:   Thu Nov 26 05:32:54 2026 -0700
+
+    Update
+
+ .gitignore                 |   4 [32m+[m[31m-[m
+ App.xaml.cs                | 110 [32m++++++[m[31m-[m
+ Assets/AppLogos/README.txt |   3 [31m-[m
+ Core/PrivacyTool.cs        |  12 [32m+[m
+ Core/SlowCheck.cs          |   3 [32m+[m
+ Core/UtilityCatalog.cs     |  14 [32m+[m[31m-[m
+ MainWindow.Check.cs        |  82 [32m+++++[m
+ MainWindow.xaml.cs         |   5 [32m+[m[31m-[m
+ README.md                  |  33 [32m+[m[31m-[m
+ Tweaks/MoreCleanup.cs      |   9 [32m+[m[31m-[m
+ Ui/DialogWindow.xaml.cs    |   8 [32m+[m
+ Ui/FullTest.cs             | 731 [32m+++++++++++++++++++++++++++++++++++++++++++++[m
+ Ui/SelfTest.cs             |  78 [32m+++[m[31m--[m
+ 13 files changed, 1046 insertions(+), 46 deletions(-)
+
+[33mcommit ecf45606fbc756fd5cb02a125f489ccc8f9a359f[m
+Author: JaidenGoode <jaiden_goode@icloud.com>
+Date:   Thu Nov 26 01:29:09 2026 -0700
+
+    Update
+
+ .github/workflows/build-and-test.yml |  47 [32m+++++++[m
+ .gitignore                           |   6 [32m+[m
+ App.xaml                             |   3 [32m+[m[31m-[m
+ App.xaml.cs                          |  50 [32m+++++++[m
+ Core/Actions.cs                      |  13 [32m++[m
+ Core/Caches.cs                       |  57 [32m+++++++[m[31m-[m
+ Core/CleanerEngine.cs                |  59 [32m++++++++[m[31m-[m
+ Core/HardwareInfo.cs                 | 221 [32m+++++++++++++++++++++[m[31m----------[m
+ Core/Sensors.cs                      |  40 [32m++++[m[31m--[m
+ Core/Settings.cs                     |   9 [32m++[m
+ Core/SlowCheck.cs                    |  24 [32m++++[m
+ Core/StartupApps.cs                  |  34 [32m++++[m[31m-[m
+ Core/StateStore.cs                   |  11 [32m++[m
+ Core/SystemInfo.cs                   |  46 [32m++++++[m[31m-[m
+ Core/TweakEngine.cs                  |  20 [32m++[m[31m-[m
+ Core/WingetService.cs                |   7 [32m+[m[31m-[m
+ MainWindow.xaml                      | 108 [32m+++++++++[m[31m------[m
+ MainWindow.xaml.cs                   | 220 [32m++++++++++++++++++++++++++++[m[31m---[m
+ README.md                            |  39 [32m++++++[m
+ TrapShack Tweak Utility.csproj       |   5 [32m+[m
+ Tweaks/CustomizeTweaks.cs            |   5 [32m+[m[31m-[m
+ Tweaks/DebloatExtras.cs              |  56 [32m++++[m[31m----[m
+ Tweaks/DebloatTweaks.cs              |  15 [31m---[m
+ Tweaks/EssentialSet.cs               |   9 [32m+[m[31m-[m
+ Tweaks/EssentialTweaks.cs            |  14 [32m+[m[31m-[m
+ Tweaks/ExtraTweaks.cs                |  15 [32m++[m[31m-[m
+ Tweaks/MoreCleanup.cs                |  82 [32m+++++++++[m[31m---[m
+ Tweaks/OptimizationSettings.cs       | 197 [32m++++++++++++++++[m[31m------------[m
+ Tweaks/OptionalServices.cs           |  24 [32m++[m[31m--[m
+ Tweaks/PerformanceTweaks.cs          |   4 [32m+[m[31m-[m
+ Tweaks/UpdateAndBrowserTweaks.cs     |   3 [32m+[m[31m-[m
+ Ui/AppsPage.xaml                     |   2 [32m+[m[31m-[m
+ Ui/AppsPage.xaml.cs                  |   2 [32m+[m[31m-[m
+ Ui/CleanerPage.xaml.cs               |  22 [32m++[m[31m--[m
+ Ui/MonitorPage.xaml.cs               |  12 [32m+[m[31m-[m
+ Ui/PageDefs.cs                       |  16 [32m+[m[31m--[m
+ Ui/RestorePage.xaml                  |   4 [32m+[m[31m-[m
+ Ui/SelfTest.cs                       | 247 [32m+++++++++++++++++++++++++++++++++++[m
+ Ui/StartupPage.xaml                  |   2 [32m+[m[31m-[m
+ Ui/TerminalView.xaml.cs              |  10 [32m+[m[31m-[m
+ build.ps1                            |   2 [32m+[m[31m-[m
+ push.bat                             |  57 [31m--------[m
+ release.bat                          |  59 [31m---------[m
+ 43 files changed, 1411 insertions(+), 467 deletions(-)
+
+[33mcommit a3a884512e0f170e5c1e7f036ba1543eb2785706[m
+Author: JaidenGoode <jaiden_goode@icloud.com>
+Date:   Wed Nov 25 23:19:02 2026 -0700
+
+    Update
+
+ MainWindow.xaml            |  84 [32m++++++++++++[m[31m----[m
+ MainWindow.xaml.cs         | 151 [32m++++++++++++++++++++++++[m[31m----[m
+ README.md                  |   2 [32m+[m[31m-[m
+ Ui/AppVMs.cs               |   2 [32m+[m
+ Ui/AppsPage.xaml           | 238 [32m+++++++++++++++++++++++++[m[31m--------------------[m
+ Ui/AppsPage.xaml.cs        |  85 [32m+++++++++++++[m[31m---[m
+ Ui/DebloatAppsPage.xaml    | 145 [32m++++++++++++++++[m[31m-----------[m
+ Ui/DebloatAppsPage.xaml.cs |  50 [32m+++++++++[m[31m-[m
+ Ui/PageDefs.cs             |   9 [32m+[m[31m-[m
+ Ui/RestorePage.xaml        | 147 [32m+++++++++++++++[m[31m-------------[m
+ Ui/RestorePage.xaml.cs     |  48 [32m++++++++[m[31m-[m
+ Ui/StartupPage.xaml        | 185 [32m+++++++++++++++++++[m[31m----------------[m
+ Ui/StartupPage.xaml.cs     |  57 [32m+++++++++[m[31m--[m
+ Ui/UtilitiesPage.xaml      | 169 [32m++++++++++++++++[m[31m----------------[m
+ Ui/UtilitiesPage.xaml.cs   |  80 [32m++++++++++++++[m[31m-[m
+ 15 files changed, 980 insertions(+), 472 deletions(-)

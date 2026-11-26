@@ -35,6 +35,7 @@ public static class SelfTest
         ["clean.reserved-storage"] = "changes reserved storage with DISM",
         ["clean.oosu"] = "downloads and opens another program",
         ["extra.restore-point"] = "makes a restore point (the Sandbox has no System Restore)",
+        ["opt.system-restore-protection"] = "switches System Restore on (the Sandbox has no System Restore); the PC scan reads it on your PC",
     };
 
     public sealed record Result(string Id, string Title, string Outcome, string? Detail);
@@ -131,7 +132,7 @@ public static class SelfTest
                 // The app wouldn't offer it here (no graphics card, no Brave, older Windows ...). If it only writes
                 // registry values, it's still safe to switch on and off in a throwaway Sandbox, so it's tested anyway:
                 // that proves its switch-on and undo work, ready for the PCs it is meant for.
-                var registryOnly = t.Actions.Where(a => a.IsApplicable()).All(a => a is RegistryAction or RegistryDeleteAction);
+                var registryOnly = t.Actions.Where(a => a.IsApplicable()).All(a => a is RegistryAction or RegistryDeleteAction or RegistryBitAction or RegistryKeyAction);
                 if (!registryOnly) return R("N/A", "not for this PC: " + (t.Evaluate(sys).Note ?? ""));
                 forced = true;
             }

@@ -34,6 +34,8 @@ public static partial class Catalog
             .Concat(Browsers())
             .Concat(DebloatMissing()).Concat(OptionalServices())
             .Concat(DebloatPlus())
+            .Concat(SourceSettings())
+            .Concat(MoreSourceSettings())
             .ToList());
 
     // ---- builders -------------------------------------------------------------------------------

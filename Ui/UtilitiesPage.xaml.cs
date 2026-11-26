@@ -13,7 +13,7 @@ public sealed class UtilVM : Notify
     public string Title => Tool.Title;
     public string Desc => Tool.Desc;
     public string Glyph => Tool.Glyph;
-    public bool OpensWindow => Tool.Steps.Length == 0;
+    public bool OpensWindow => Tool.Steps.Length == 0 && !Tool.Builtin;
     public string ButtonText => OpensWindow ? "Open" : "Run";
     public string ButtonGlyph => OpensWindow ? "" : "";
 
@@ -172,6 +172,7 @@ public partial class UtilitiesPage : UserControl
         }
 
         if (_running || _host.Busy) return;
+        if (tool.Builtin) { await RepairTweaksAsync(vm); return; }
         if (tool.Confirm != null && !Dialogs.Confirm(_host.Win, tool.Title, tool.Confirm, "Run", "Cancel")) return;
 
         _running = true; _host.Busy = true;
@@ -221,5 +222,119 @@ public partial class UtilitiesPage : UserControl
         foreach (var other in _all) other.Blocked = false;
         _running = false; _host.Busy = false;
         if (!stopped && tool.Restart) _host.SuggestRestart(tool.Title + " is finished. Restart to complete it.");
+    }
+
+    // ------------------------------------------------------------------ Repair harmful tweaks
+
+    void Say(string text, TermKind kind = TermKind.Info) => _win?.Term.Note(text, kind);
+
+    async Task RepairTweaksAsync(UtilVM vm)
+    {
+        var tool = vm.Tool;
+        _running = true; _host!.Busy = true;
+        vm.IsRunning = true;
+        foreach (var other in _all) other.Blocked = true;
+        ShowTerminal(tool.Title);
+        _win!.Running = true;
+        _win.Term.SetState(TermState.Running, tool.Title);
+        var restart = false;
+        try
+        {
+            Say("Scanning (this only reads; nothing is changed yet)…");
+            Say("Looks at: " + TweakDoctor.Covers, TermKind.Output);
+            Say("Settings TrapShack itself manages are skipped: they're verified and have their own switch and Undo.", TermKind.Output);
+            var found = await Task.Run(TweakDoctor.Scan);
+
+            if (found.Count == 0)
+            {
+                Say("Nothing harmful found. Everything checked is at Windows' default or a verified setting.", TermKind.Success);
+                _win?.Term.SetState(TermState.Done, "Nothing to repair");
+                return;
+            }
+
+            Say($"Found {found.Count} problem{(found.Count == 1 ? "" : "s")}:", TermKind.Warning);
+            foreach (var f in found)
+            {
+                Say($"•  {f.Title}  [{f.Area}]", TermKind.Warning);
+                Say($"     Why it matters: {f.Problem}", TermKind.Output);
+                Say($"     Fix: {f.Fix}", TermKind.Output);
+            }
+
+            var list = string.Join("\n", found.Take(12).Select(f => "•  " + f.Title));
+            if (found.Count > 12) list += $"\n…and {found.Count - 12} more (all listed in the window behind)";
+            if (!Dialogs.Confirm(_host.Win, "Repair harmful tweaks",
+                    $"TrapShack found {(found.Count == 1 ? "this" : $"these {found.Count}")} and will put {(found.Count == 1 ? "it" : "each one")} back to Windows' default:\n\n{list}\n\n" +
+                    "A restore point is made first. Nothing else is changed.", "Repair", "Cancel"))
+            {
+                Say("Cancelled. Nothing was changed.", TermKind.Warning);
+                _win?.Term.SetState(TermState.Stopped, "Nothing was changed");
+                return;
+            }
+
+            Say("Making a restore point first…");
+            var rp = await Task.Run(() => RestorePoint.Create("TrapShack - before repairing tweaks"));
+            if (rp.Ok) Say("Restore point made.", TermKind.Success);
+            else
+            {
+                Say("Windows didn't make a restore point: " + rp.Message, TermKind.Warning);
+                if (!Dialogs.Confirm(_host.Win, "No restore point",
+                        "Windows couldn't make a restore point (System Restore may be off). Repair anyway? Each fix only puts back Windows' own default.",
+                        "Repair anyway", "Cancel"))
+                {
+                    Say("Cancelled. Nothing was changed.", TermKind.Warning);
+                    _win?.Term.SetState(TermState.Stopped, "Nothing was changed");
+                    return;
+                }
+            }
+
+            int fixedCount = 0, failed = 0;
+            foreach (var f in found)
+            {
+                Say("Repairing: " + f.Title);
+                var (ok, error) = await Task.Run(() =>
+                {
+                    try { f.Repair(); return (!f.StillBad(), (string?)null); }
+                    catch (Exception ex) { return (false, (string?)ex.Message); }
+                });
+                if (ok)
+                {
+                    fixedCount++;
+                    restart |= f.Restart;
+                    Log.Info("Repair tool fixed: " + f.Id);
+                    Say("   Fixed" + (f.Restart ? " (takes effect after a restart)" : ""), TermKind.Success);
+                }
+                else
+                {
+                    failed++;
+                    Log.Error($"Repair tool couldn't fix {f.Id}: {error ?? "still set afterwards"}");
+                    Say("   Couldn't fix this one: " + (error ?? "Windows kept the old setting (a policy or security software may be holding it)."), TermKind.Error);
+                }
+            }
+
+            if (failed == 0)
+            {
+                Say($"All {fixedCount} repaired.", TermKind.Success);
+                _win?.Term.SetState(TermState.Done, $"{fixedCount} repaired");
+            }
+            else
+            {
+                Say($"{fixedCount} repaired, {failed} couldn't be fixed (see above).", TermKind.Warning);
+                _win?.Term.SetState(TermState.Failed, $"{failed} couldn't be fixed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Repair tool failed: " + ex);
+            Say("Something went wrong: " + ex.Message, TermKind.Error);
+            _win?.Term.SetState(TermState.Failed, tool.Title + " needs a look");
+        }
+        finally
+        {
+            if (_win != null) _win.Running = false;
+            vm.IsRunning = false;
+            foreach (var other in _all) other.Blocked = false;
+            _running = false; _host.Busy = false;
+        }
+        if (restart) _host.SuggestRestart("Harmful tweaks were repaired. Restart to finish.");
     }
 }

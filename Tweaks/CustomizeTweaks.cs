@@ -52,7 +52,7 @@ public static partial class Catalog
         yield return Mk("custom.taskbar-left", Category.Customize, TaskbarGroup,
             "Align the taskbar to the left",
             "Start button and icons sit on the left like Windows 10.",
-            s => W11(s, Verdict.Opt()),
+            s => W11(s, Verdict.Rec()),
             L(CU(Adv, "TaskbarAl", 0, 1)),
             detail: "Off = centred (the Windows 11 default).");
 

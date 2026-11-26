@@ -37,8 +37,12 @@ public partial class MainWindow : Window, IPageHost
     public MainWindow()
     {
         InitializeComponent();
+        ThemeWheel.Source = ColorWheelIcon.Create();
         SourceInitialized += (_, _) => WorkArea.Hook(this);   // maximised = the screen minus the taskbar
         Closing += OnWindowClosing;
+        Action<string> cleanupDone = msg => Dispatcher.InvokeAsync(() => SetStatus(msg));
+        DiskCleanup.Finished += cleanupDone;
+        Closed += (_, _) => DiskCleanup.Finished -= cleanupDone;
         BuildNav();
         _effectsReady = false;
         Fx.On = _settings.LiveEffects;
@@ -126,7 +130,7 @@ public partial class MainWindow : Window, IPageHost
         PreloadSystemInfo();
         _ = BackgroundStartAsync(probeCached);
         UtilitiesPanel.Init(this, _sys.IsLaptop);
-        SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
+        SidebarSystem.Text = $"{_sys.OsName}\n{HardwareLine}";
         UpdatePutBack();
         Navigate("home");
         FadeOutSplash();
@@ -186,10 +190,10 @@ public partial class MainWindow : Window, IPageHost
             _ = AppsPanel.ScanAsync();
             if (probeCached)
             {
-                var before = GpuBrand;
+                var before = HardwareLine;
                 await Task.Run(() => _sys.ProbeSlow());
                 SaveProbe();
-                if (GpuBrand != before) SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
+                if (HardwareLine != before) SidebarSystem.Text = $"{_sys.OsName}\n{HardwareLine}";
             }
             await Task.Delay(1500);
             _ = MonitorPanel.Preload();
@@ -239,8 +243,34 @@ public partial class MainWindow : Window, IPageHost
         await Task.CompletedTask;
     }
 
-    /// <summary>Decides how well a tweak fits this PC. This is where the smart gating lives.</summary>
+    // What this PC has taught the app about a setting (kept in state.json):
+    const string ResetKey = "app.reset/";            // how many times Windows switched it back after TrapShack set it
+    const string ResetNotedKey = "app.reset-noted/"; // the current switch-back has been counted
+    const string KeepWindowsKey = "app.keep-windows/";// you pressed "Keep as is" for it
+    const string RanKey = "app.ran/";                 // when a one-time action last ran
+
+    /// <summary>
+    /// Decides how well a tweak fits this PC. On top of the hardware checks: a setting that Windows keeps switching
+    /// back on this PC, or one you chose to leave as Windows has it, is no longer part of Apply recommended (it can
+    /// still be switched on by hand), so it doesn't keep coming back.
+    /// </summary>
     Verdict Judge(Tweak t)
+    {
+        var v = JudgeCore(t);
+        if (v.Fit != Fit.Recommended) return v;
+        if (_engine.State.Has(KeepWindowsKey + t.Id))
+            return Verdict.Opt("You chose to keep Windows' own setting here, so Apply recommended leaves it out. You can still switch it on.");
+        if (int.TryParse(_engine.State.Get(ResetKey + t.Id), out var resets) && resets >= 2)
+            return Verdict.Opt("Windows switches this back by itself on this PC, so Apply recommended leaves it out. You can still switch it on.");
+        return v;
+    }
+
+    /// <summary>True when a one-time action (Disk Cleanup, temporary files) ran in the last 30 days.</summary>
+    bool RanRecently(Tweak t) =>
+        DateTime.TryParse(_engine.State.Get(RanKey + t.Id), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at)
+        && DateTime.UtcNow - at < TimeSpan.FromDays(30);
+
+    Verdict JudgeCore(Tweak t)
     {
         if (!_sys.Supported)
             return Verdict.No("TrapShack needs Windows 10 (version 2004 or newer) or Windows 11.");
@@ -255,18 +285,43 @@ public partial class MainWindow : Window, IPageHost
         var pageKey = PageDefs.KeyOf(t);
         if (pageKey == "customize") return v;   // Customization sits under Optimizations but keeps its own verdicts
         var section = PageDefs.Get(pageKey).Section;
-        if (section == PageDefs.Debloat)
+        if (section is PageDefs.Debloat or PageDefs.Optimizations)
         {
-            if (Recommended.Standard.Contains(t.Id)) return v.Fit == Fit.Optional ? Verdict.Rec(v.Note) : v;
-            if (v.Fit == Fit.Recommended) return Verdict.Opt(v.Note);
-        }
-        else if (section == PageDefs.Optimizations)
-        {
+            // Debloat: the standard set of the two debloat sources
+            if (section == PageDefs.Debloat && Recommended.Standard.Contains(t.Id)) return v.Fit == Fit.Optional ? Verdict.Rec(v.Note) : v;
+            // the optimisation source's recommended values, wherever the setting is shown (some sit on the Debloat page)
             if (t.Id.StartsWith("opt.")) return v;   // carries its own verdict
             if (Recommended.OptimizationRecommended.Contains(t.Id)) return v.Fit == Fit.Optional ? Verdict.Rec(v.Note) : v;
+            if (Recommended.HardwareChecked.Contains(t.Id)) return v;
             if (v.Fit == Fit.Recommended) return Verdict.Opt(v.Note);
         }
         return v;
+    }
+
+    /// <summary>
+    /// The sidebar's hardware line, for any mix: "AMD CPU · NVIDIA GPU", "Intel CPU · AMD GPU", "Intel CPU · Intel Arc GPU".
+    /// The dedicated card wins over built-in graphics; a part that can't be identified is left out rather than guessed.
+    /// </summary>
+    string HardwareLine
+    {
+        get
+        {
+            var cpu = _sys.IsAmdCpu ? "AMD" : _sys.IsIntelCpu ? "Intel"
+                    : _sys.Cpu.Contains("Snapdragon", StringComparison.OrdinalIgnoreCase) || _sys.Cpu.Contains("Qualcomm", StringComparison.OrdinalIgnoreCase) ? "Snapdragon"
+                    : null;
+            string? gpu = _sys.HasNvidiaGpu ? "NVIDIA" : _sys.HasAmdDiscreteGpu ? "AMD" : _sys.HasIntelArcGpu ? "Intel Arc" : null;
+            if (gpu == null)
+                foreach (var g in _sys.Gpus)
+                {
+                    if (g.Contains("AMD", StringComparison.OrdinalIgnoreCase) || g.Contains("Radeon", StringComparison.OrdinalIgnoreCase)) { gpu = "AMD"; break; }
+                    if (g.Contains("Intel", StringComparison.OrdinalIgnoreCase)) { gpu = "Intel"; break; }
+                    if (g.Contains("Qualcomm", StringComparison.OrdinalIgnoreCase) || g.Contains("Adreno", StringComparison.OrdinalIgnoreCase)) { gpu = "Qualcomm"; break; }
+                }
+            var parts = new List<string>();
+            if (cpu != null) parts.Add(cpu + " CPU");
+            if (gpu != null) parts.Add(gpu + " GPU");
+            return parts.Count > 0 ? string.Join(" · ", parts) : _sys.DeviceType;
+        }
     }
 
     string GpuBrand =>
@@ -285,6 +340,7 @@ public partial class MainWindow : Window, IPageHost
         _navKeys[NavSystem] = "system"; _navByKey["system"] = NavSystem;
         _navKeys[NavTemps] = "temps"; _navByKey["temps"] = NavTemps;
         _navKeys[NavSettings] = "settings"; _navByKey["settings"] = NavSettings;
+        foreach (var fixedRb in new[] { NavHome, NavSystem, NavTemps, NavSettings }) fixedRb.PreviewMouseLeftButtonDown += OnNavReclick;
 
         RadioButton Add(string key, string title, string glyph, bool sub)
         {
@@ -294,6 +350,7 @@ public partial class MainWindow : Window, IPageHost
                 Margin = sub ? new Thickness(16, 0, 0, 0) : new Thickness(0),
             };
             rb.Checked += OnNavChecked;
+            rb.PreviewMouseLeftButtonDown += OnNavReclick;
             _navKeys[rb] = key; _navByKey[key] = rb;
             NavHost.Children.Add(rb);
             return rb;
@@ -308,6 +365,17 @@ public partial class MainWindow : Window, IPageHost
         Add("utilities", "Utilities", "\uE90F", false);
         Add("startup", "Startup apps", "\uE7E8", false);
         Add("restore", "Restore points", "\uE81C", false);
+    }
+
+    /// <summary>
+    /// Clicking the page you're already on takes you back to its start: Optimizations and Debloat to their first
+    /// section, Settings to Appearance.
+    /// </summary>
+    void OnNavReclick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_loaded || sender is not RadioButton rb || rb.IsChecked != true || !_navKeys.TryGetValue(rb, out var key)) return;
+        if (key == "settings") { ShowSettingsSection(SettingsSections[0].Key); return; }
+        if (key is "hub" or "debloat") Navigate(key);
     }
 
     void OnNavChecked(object sender, RoutedEventArgs e)
@@ -352,6 +420,7 @@ public partial class MainWindow : Window, IPageHost
         SetProfiles.Visibility = key == "Profiles" ? Visibility.Visible : Visibility.Collapsed;
         SetSafety.Visibility = key == "Safety" ? Visibility.Visible : Visibility.Collapsed;
         SetUpdates.Visibility = key == "Updates" ? Visibility.Visible : Visibility.Collapsed;
+        if (key == "Updates") { RefreshShortcutStatus(); _ = RefreshNeedsAsync(); }
         SettingsScroll.ScrollToTop();
     }
 
@@ -554,8 +623,17 @@ public partial class MainWindow : Window, IPageHost
     };
 
     /// <summary>Order of the groups inside an Optimizations area: gaming and performance first, AI, services and updates last.</summary>
+    /// <summary>The order of the groups on the Customization page.</summary>
+    static readonly string[] CustomizeOrder =
+    {
+        "Start menu", "Taskbar & clock", "Desktop", "File Explorer", "Navigation pane", "This PC folders", "Context menu",
+        "Mouse & keyboard", "Accessibility shortcuts", "Appearance", "Windows behaviour", "Devices",
+    };
+
     static int GroupRank(string name)
     {
+        var c = Array.IndexOf(CustomizeOrder, name);
+        if (c >= 0) return 100 + c;   // these groups only appear on the Customization page
         var n = " " + name.ToLowerInvariant() + " ";
         if (n.Contains("gam") || n.Contains("graphic") || n.Contains("gpu")) return 0;
         if (n.Contains("performance") || n == " system ") return 1;
@@ -817,6 +895,7 @@ public partial class MainWindow : Window, IPageHost
             if (v.IsOn)
             {
                 if (!_engine.State.Has(seenKey) && _engine.HasBackup(v.T)) newlySeen.Add(seenKey);
+                _engine.State.Remove(ResetNotedKey + v.T.Id);
                 continue;
             }
             if (!_engine.State.Has(seenKey)) continue;
@@ -825,6 +904,24 @@ public partial class MainWindow : Window, IPageHost
             // a setting that shares its Windows value with another one that is on was switched off on purpose
             if (_clash.TryGetValue(v.T.Id, out var cl) && cl.Any(o => o.IsOn)) continue;
             if (v.T.ChoiceGroup != null && _vms.Any(o => o != v && o.T.ChoiceGroup == v.T.ChoiceGroup && o.IsOn)) continue;
+
+            // Windows switched it back. Counted once per time, with exactly what changed, for the log.
+            if (!_engine.State.Has(ResetNotedKey + v.T.Id))
+            {
+                var resets = (int.TryParse(_engine.State.Get(ResetKey + v.T.Id), out var n) ? n : 0) + 1;
+                _engine.State.Set(ResetKey + v.T.Id, resets.ToString());
+                _engine.State.Set(ResetNotedKey + v.T.Id, "1");
+                var parts = v.T.Actions.Where(a => { try { return a.IsApplicable() && !a.IsApplied(); } catch { return false; } })
+                    .Select(a => { try { return $"{a.Describe()} (now: {a.TestState() ?? "not set"})"; } catch { return a.Describe(); } });
+                Log.Info($"Windows changed {v.T.Id} back (time {resets}): {string.Join("; ", parts)}");
+                if (resets >= 2)
+                {
+                    // the second time: it keeps happening on this PC, so stop offering it instead of nagging
+                    _engine.State.Remove(seenKey);
+                    v.SetVerdict(Judge(v.T));
+                    continue;
+                }
+            }
             found.Add(v);
         }
         if (newlySeen.Count > 0) _engine.State.SetMany(newlySeen, "1");
@@ -846,14 +943,19 @@ public partial class MainWindow : Window, IPageHost
     /// <summary>Leaves them as Windows has them now; the card only comes back for a setting that is switched on again and later reset.</summary>
     void OnKeepAsIs(object sender, RoutedEventArgs e)
     {
-        foreach (var v in _putBack) _engine.State.Remove(SeenOnKey + v.T.Id);
-        UpdatePutBack();
+        foreach (var v in _putBack)
+        {
+            _engine.State.Remove(SeenOnKey + v.T.Id);
+            _engine.State.Set(KeepWindowsKey + v.T.Id, "1");   // and Apply recommended stops offering it
+            v.SetVerdict(Judge(v.T));
+        }
+        RefreshViews();
     }
 
     /// <summary>The Home page is deliberately small: who this PC is, how far the recommended set has got, and the two actions.</summary>
     void RefreshHome()
     {
-        var recommended = _vms.Where(v => v.V.Fit == Fit.Recommended && !v.T.OneShot).ToList();
+        var recommended = _vms.Where(v => InHomeSet(v) && !v.T.OneShot).ToList();
         var done = recommended.Count(v => v.IsOn);
         var pending = recommended.Count - done;
 
@@ -892,12 +994,20 @@ public partial class MainWindow : Window, IPageHost
         vm.SetBusy(false);
         _busy = false;
         if (error != null) Dialogs.Info(this, "That didn't finish", vm.T.Title + ":\n\n" + error);
-        SetStatus(error == null ? $"{vm.T.Title}: done" : $"{vm.T.Title}: failed");
+        SetStatus(error != null ? $"{vm.T.Title}: failed"
+                : vm.T.Id == DiskCleanupId ? "Disk Cleanup is running quietly in the background. You can keep using the PC."
+                : $"{vm.T.Title}: done");
     }
 
     string? TryRun(Tweak t)
     {
-        try { foreach (var a in t.Actions) a.Apply(); return null; }
+        try
+        {
+            foreach (var a in t.Actions) a.Apply();
+            // remembered, so Apply recommended doesn't offer it again for 30 days
+            _engine.State.Set(RanKey + t.Id, DateTime.UtcNow.ToString("o"));
+            return null;
+        }
         catch (Exception ex) { Log.Error($"Run {t.Id}: {ex}"); return ex.Message; }
     }
 
@@ -1056,7 +1166,12 @@ public partial class MainWindow : Window, IPageHost
     {
         if (_page != null)
         {
-            if (IsOptimizations) return v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations;
+            // on the Optimizations page, Quick actions work on the area you have open (Gaming, Power, Customization ...)
+            if (IsOptimizations)
+            {
+                var area = _cat;
+                return area != null ? v => v.PageKey == area : v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations;
+            }
             var key = _page.Key; return v => v.PageKey == key;
         }
         if (_hub)
@@ -1107,6 +1222,12 @@ public partial class MainWindow : Window, IPageHost
 
     void OnApplyAll(object sender, RoutedEventArgs e) => _ = ApplyRecommendedAsync(null);
 
+    /// <summary>
+    /// What Home's Apply recommended covers: everything recommended for this PC, except Customization picks that are
+    /// a matter of taste (those are applied from the Customization page's own Apply recommended).
+    /// </summary>
+    static bool InHomeSet(TweakVM v) => v.V.Fit == Fit.Recommended && !Recommended.PersonalChoice.Contains(v.T.Id);
+
     void OnHomeClean(object sender, RoutedEventArgs e) => SelectNav("cleaner");
 
     /// <summary>At startup the cleaner scans quietly (it only reads), so Home can show what a clean would free.</summary>
@@ -1125,10 +1246,16 @@ public partial class MainWindow : Window, IPageHost
     {
         if (_busy) return;
 
+        // taste-only Customization picks are applied only from the Customization page itself
+        var personalOk = scope != null && _vms.Where(scope).ToList() is { Count: > 0 } scoped && scoped.All(v => v.PageKey == "customize");
         // a loaded profile applies its own list (only settings that are off and allowed on this PC)
         var todo = profile != null
             ? profile.Where(v => !v.IsOn && v.CanToggle && !v.T.OneShot).ToList()
-            : _vms.Where(v => (scope == null || scope(v)) && v.V.Fit == Fit.Recommended && !v.IsOn).ToList();
+            : _vms.Where(v => (scope == null ? InHomeSet(v) : scope(v) && v.V.Fit == Fit.Recommended && (personalOk || !Recommended.PersonalChoice.Contains(v.T.Id)))
+                              && !v.IsOn && !(v.T.OneShot && RanRecently(v.T))).ToList();
+        // settings first, one-time clean-ups after them, and Disk Cleanup last (it then carries on in the background)
+        todo = todo.OrderBy(v => !v.T.OneShot ? 0 : v.T.Id == DiskCleanupId ? 2 : 1).ToList();
+        var cleanupStarted = false;
         if (todo.Count == 0)
         {
             Dialogs.Info(this, "Nothing to apply", "Every recommended setting for this PC is already applied.");
@@ -1199,7 +1326,9 @@ public partial class MainWindow : Window, IPageHost
             {
                 good++;
                 if (vm.T.RestartRequired || vm.T.SignOutRequired) { restart++; _restartIds.Add(vm.T.Id); }
-                Apply.EndStep(row, StepResult.Done, vm.T.OneShot ? "Done" : null);
+                var bg = vm.T.Id == DiskCleanupId;
+                cleanupStarted |= bg;
+                Apply.EndStep(row, StepResult.Done, bg ? "Running in the background" : vm.T.OneShot ? "Done" : null);
             }
             else
             {
@@ -1221,12 +1350,17 @@ public partial class MainWindow : Window, IPageHost
         await Apply.WaitClosedAsync();
         _busy = false;
         RefreshViews();
-        SetStatus(putBack ? $"Turned {good} of {todo.Count} settings back on" : $"Applied {good} of {todo.Count} recommended settings");
+        SetStatus((putBack ? $"Turned {good} of {todo.Count} settings back on" : $"Applied {good} of {todo.Count} recommended settings") +
+                  (cleanupStarted ? ". Disk Cleanup keeps running quietly in the background." : ""));
         QueueRestartPrompt();
     }
 
+    const string DiskCleanupId = "extra.disk-cleanup";
+
     string? TryApply(Tweak t)
     {
+        // switched on on purpose: a "Keep as is" from before no longer applies
+        _engine.State.Remove(KeepWindowsKey + t.Id);
         try { _engine.Apply(t); return null; }
         catch (Exception ex)
         {
@@ -1775,7 +1909,7 @@ public partial class MainWindow : Window, IPageHost
     async void OnInstallUpdate(object sender, RoutedEventArgs e)
     {
         if (_update == null) return;
-        if (!Dialogs.Confirm(this, "Update TrapShack", "TrapShack will download version " + _update.Latest.ToString(3) + ", close, and open again by itself. Your settings and undo data are kept.", "Update now", "Not now")) return;
+        if (!Dialogs.Confirm(this, "Update TrapShack", "TrapShack will download the new version, close, and open again by itself. Your settings and undo data are kept.", "Update now", "Not now")) return;
         UpdInstall.IsEnabled = false; UpdCheck.IsEnabled = false;
         UpdBar.Value = 0; UpdBar.Visibility = Visibility.Visible;
         UpdStatus.Foreground = (Brush)FindResource("MutedBrush");
@@ -1880,7 +2014,11 @@ public partial class MainWindow : Window, IPageHost
         AccentHexNote.Text = "Saved. This colour will be used next time too.";
     }
 
-    void OnThemeClick(object sender, RoutedEventArgs e) => SelectNav("settings");
+    void OnThemeClick(object sender, RoutedEventArgs e)
+    {
+        SelectNav("settings");
+        ShowSettingsSection("Appearance");
+    }
 
     void ShowRestorePointSetting() =>
         RpSettingNote.Text = _settings.RestorePointAsked

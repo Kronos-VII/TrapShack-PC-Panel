@@ -64,9 +64,14 @@ public static partial class Catalog
         yield return Mk("opt.gaming-performance-prefetch", Category.Performance, "System services",
             "Turn off Prefetch",
             "Preload frequently used applications and boot files into memory to speed up launches. Generally recommended for HDDs not SSDs",
-            _ => Verdict.Warn("Slows app launches on a hard disk."),
+            s => s.SystemDriveIsSsd switch
+            {
+                true => Verdict.Rec("Windows is on an SSD, where Prefetch gives almost nothing."),
+                false => Verdict.Warn("Slows app launches on a hard disk."),
+                _ => Verdict.Opt(),
+            },
             L(new RegistryAction(RegistryHive.LocalMachine, "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters", "EnablePrefetcher", 0, RegistryValueKind.DWord, 3)),
-            detail: "Preload frequently used applications and boot files into memory to speed up launches. Generally recommended for HDDs not SSDs. TrapShack never applies this automatically.", risk: Risk.Advanced);
+            detail: "Preload frequently used applications and boot files into memory to speed up launches. Generally recommended for HDDs not SSDs. Recommended only when Windows is on an SSD.", risk: Risk.Advanced);
 
         yield return Mk("opt.gaming-print-spooler-service", Category.Performance, "System services",
             "Print Spooler Service",
@@ -213,7 +218,7 @@ public static partial class Catalog
         yield return Mk("opt.security-uac-level", Category.Privacy, "Security",
             "User Account Control Level",
             "Controls UAC notification level and secure desktop behavior",
-            _ => Verdict.Rec("Windows will stop asking before programs make admin-level changes, so it lowers protection from malware."),
+            _ => Verdict.Warn("A security setting: Windows would stop asking before programs make admin-level changes, which lowers protection from malware. Never applied automatically."),
             L(new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "ConsentPromptBehaviorAdmin", 0, RegistryValueKind.DWord, 5),
               new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "PromptOnSecureDesktop", 0, RegistryValueKind.DWord, 1)),
             detail: "Controls UAC notification level and secure desktop behavior. Part of the recommended set. Windows stops asking for your permission before admin-level changes.", risk: Risk.Advanced);
@@ -221,7 +226,7 @@ public static partial class Catalog
         yield return Mk("opt.security-bitlocker-auto-encryption", Category.Privacy, "Security",
             "Turn off BitLocker automatic encryption",
             "Controls whether Windows can automatically encrypt drives with BitLocker. Has no effect if BitLocker encryption is already active on your device",
-            _ => Verdict.Rec("Stops Windows encrypting this PC automatically. On a laptop you could lose, leave this off."),
+            s => s.IsLaptop ? Verdict.Warn("Automatic encryption protects your files if the laptop is lost or stolen. Leave this off.") : Verdict.Opt("Stops Windows encrypting this PC automatically. A security setting, so it's never applied automatically."),
             L(new RegistryAction(RegistryHive.LocalMachine, "SYSTEM\\CurrentControlSet\\Control\\BitLocker", "PreventDeviceEncryption", 1, RegistryValueKind.DWord, 0)),
             detail: "Controls whether Windows can automatically encrypt drives with BitLocker. Has no effect if BitLocker encryption is already active on your device. Part of the recommended set.", risk: Risk.Advanced);
 
@@ -242,7 +247,7 @@ public static partial class Catalog
         yield return Mk("opt.security-powershell-execution-policy", Category.Privacy, "Security",
             "PowerShell Execution Policy",
             "Controls whether PowerShell scripts are allowed to run and under what conditions for both the current user and the local machine",
-            _ => Verdict.Rec("Sets PowerShell to RemoteSigned: local scripts run, downloaded scripts must be signed."),
+            _ => Verdict.Warn("A security setting: lets local PowerShell scripts run (downloaded ones must be signed). Never applied automatically."),
             L(new RegistryAction(RegistryHive.CurrentUser, "Software\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.PowerShell", "ExecutionPolicy", "RemoteSigned", RegistryValueKind.String, "Restricted"),
               new RegistryAction(RegistryHive.LocalMachine, "Software\\Microsoft\\PowerShell\\1\\ShellIds\\Microsoft.PowerShell", "ExecutionPolicy", "RemoteSigned", RegistryValueKind.String, "Restricted")),
             detail: "Controls whether PowerShell scripts are allowed to run and under what conditions for both the current user and the local machine. Part of the recommended set.", risk: Risk.Advanced);
@@ -327,14 +332,14 @@ public static partial class Catalog
         yield return Mk("opt.privacy-account-info-access", Category.Privacy, "App permissions",
             "Block apps from your account info",
             "Allow apps to have account info access",
-            _ => Verdict.Warn("Apps can no longer read your name and account picture."),
+            _ => Verdict.Rec("Apps can no longer read your name and account picture."),
             L(new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\userAccountInformation", "Value", "Deny", RegistryValueKind.String, "Allow")),
             detail: "Allow apps to have account info access. TrapShack never applies this automatically.", risk: Risk.Advanced);
 
         yield return Mk("opt.privacy-app-diagnostic-access", Category.Privacy, "App permissions",
             "Block apps from reading other apps' diagnostic info",
             "Allow apps to have app diagnostic access",
-            _ => Verdict.Warn("Task Manager-style apps lose access to other apps' diagnostics."),
+            _ => Verdict.Rec("Task Manager-style apps lose access to other apps' diagnostics."),
             L(new RegistryAction(RegistryHive.LocalMachine, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\appDiagnostics", "Value", "Deny", RegistryValueKind.String, "Allow")),
             detail: "Allow apps to have app diagnostic access. TrapShack never applies this automatically.", risk: Risk.Advanced);
 

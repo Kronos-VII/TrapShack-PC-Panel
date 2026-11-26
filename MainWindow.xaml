@@ -525,8 +525,7 @@
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" Margin="22,10,16,18">
-                    <TextBlock x:Name="SidebarSystem" FontSize="11" Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap"/>
-                    <TextBlock Text="v0.1.0" FontSize="11" Foreground="{DynamicResource Ink_FF4C4C57}" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="SidebarSystem" FontSize="11" Foreground="{DynamicResource FaintBrush}" TextWrapping="Wrap" LineHeight="16"/>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,4">
@@ -578,8 +577,12 @@
             <!-- Title bar buttons -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
                         WindowChrome.IsHitTestVisibleInChrome="True">
-                <Button x:Name="ThemeBtn" Style="{StaticResource WindowButton}" ToolTip="Settings" Click="OnThemeClick">
-                    <Ellipse Width="13" Height="13" Fill="{DynamicResource AccentBrush}" Stroke="{DynamicResource Ink_66FFFFFF}" StrokeThickness="1"/>
+                <!-- a small colour wheel with the current accent in the middle: opens Settings > Appearance -->
+                <Button x:Name="ThemeBtn" Style="{StaticResource WindowButton}" ToolTip="Colours and appearance" Click="OnThemeClick">
+                    <Grid Width="18" Height="18">
+                        <Image x:Name="ThemeWheel" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}" Stroke="{DynamicResource Ink_66FFFFFF}" StrokeThickness="0.75"/>
+                    </Grid>
                 </Button>
                 <Button Style="{StaticResource WindowButton}" Content="&#xE921;" Click="OnMinimize"/>
                 <Button x:Name="MaxButton" Style="{StaticResource WindowButton}" Content="&#xE922;" Click="OnMaximize"/>
@@ -742,6 +745,45 @@
                                 </StackPanel>
                             </Grid>
                             <ProgressBar x:Name="UpdBar" Style="{StaticResource ThinBar}" Height="6" Margin="0,14,0,0" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
+                            CornerRadius="14" Padding="20,16" Margin="0,12,0,0">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource Ink_FF1A1A21}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE71B;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                               Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="Shortcuts" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="ShortcutStatus" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+                                               Text="Adds TrapShack to the desktop and the Start menu, pointing at this copy of the app."/>
+                                </StackPanel>
+                                <Button Grid.Column="2" x:Name="ShortcutBtn" Style="{StaticResource GhostButton}" Content="Create shortcuts"
+                                        VerticalAlignment="Center" Click="OnCreateShortcuts"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
+                            CornerRadius="14" Padding="20,16" Margin="0,12,0,0">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource Ink_FF1A1A21}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE9D9;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                               Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="What TrapShack needs" FontSize="15" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
+                                               Text="Nothing to install to run it: everything the app itself needs is built into the one file. A few pages use parts of Windows, checked here."/>
+                                </StackPanel>
+                                <Button Grid.Column="2" Style="{StaticResource GhostButton}" Content="Check again"
+                                        VerticalAlignment="Center" Click="OnCheckNeeds"/>
+                            </Grid>
+                            <StackPanel x:Name="NeedsList" Margin="54,12,0,0"/>
                         </StackPanel>
                     </Border>
                     </StackPanel>

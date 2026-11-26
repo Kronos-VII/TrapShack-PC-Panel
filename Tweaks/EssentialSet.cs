@@ -61,8 +61,12 @@ public static partial class Catalog
             L(new ServiceAction("CscService", "disabled", "demand"),
               new ServiceAction("MapsBroker", "demand", "auto"),
               new ServiceAction("StorSvc", "demand", "auto"),
-              new ServiceAction("SharedAccess", "disabled", "auto")),
-            detail: "Disables Offline Files and Internet Connection Sharing (needed for sharing your connection as a hotspot); sets Maps and Storage services to Manual. Each service goes back to its original startup type when you restore.");
+              // Windows Sandbox, Hyper-V, WSL and Docker give their machines internet through this service, and Windows
+              // switches it straight back on when they start. On those PCs it's left alone.
+              new ServiceAction("SharedAccess", "disabled", "auto", applicable: () => !RegUtil.KeyExists(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Services\hns"))),
+            detail: "Disables Offline Files and Internet Connection Sharing (needed for sharing your connection as a hotspot); sets Maps and Storage services to Manual. " +
+                    "On PCs with Windows Sandbox, Hyper-V, WSL or Docker, Internet Connection Sharing is left on: they need it for their internet, and Windows turns it back on anyway. " +
+                    "Each service goes back to its original startup type when you restore.");
 
         yield return Mk("extra.telemetry", Category.Debloat, Essential,
             "Turn off telemetry",
@@ -112,11 +116,14 @@ public static partial class Catalog
             "One-time cleanup of drive C: and old Windows Update files.",
             Sometimes,
             L(new CustomAction(
-                "Disk Cleanup on C: and Windows Update component cleanup (one-time, cannot be undone)",
+                "Disk Cleanup, then Windows Update component cleanup (DISM /StartComponentCleanup /ResetBase), silently in the background (one-time, cannot be undone)",
                 isApplied: () => false,
-                apply: () => Shell.PowerShell("cleanmgr.exe /d C: /VERYLOWDISK; Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase", 3_600_000))),
-            detail: "Runs Disk Cleanup on C: and removes superseded Windows Update components. This cannot be undone and takes several minutes. Afterwards you can no longer uninstall the Windows updates installed so far.",
-            confirm: "This runs Disk Cleanup and removes old Windows Update files. It can take several minutes and cannot be undone: you will no longer be able to uninstall updates installed so far."));
+                apply: () => DiskCleanup.StartInBackground())),
+            detail: "Runs Disk Cleanup silently in the background (everything it offers except your Downloads folder), then removes superseded Windows Update components. " +
+                    "No windows open and you can keep using the PC; it can take 10 to 40 minutes and finishes even if you close TrapShack. " +
+                    "This cannot be undone: afterwards you can no longer uninstall the Windows updates installed so far, or go back to a previous version of Windows.",
+            confirm: "Disk Cleanup runs silently in the background and then removes old Windows Update files. Your Downloads folder is never touched. " +
+                     "It can take 10 to 40 minutes and cannot be undone: you will no longer be able to uninstall updates installed so far, or go back to a previous version of Windows."));
 
         yield return Once(Mk("extra.delete-temp", Category.Debloat, Essential,
             "Delete temporary files",

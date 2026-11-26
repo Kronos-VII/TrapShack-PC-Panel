@@ -10,7 +10,8 @@ public sealed record UtilStep(string Label, string File, string Args, bool Unico
 /// <see cref="Open"/> is set and there are no steps) it simply opens a Windows tool.
 /// </summary>
 public sealed record UtilTool(string Id, string Section, string Title, string Desc, string Glyph, UtilStep[] Steps,
-    string? Confirm = null, bool Restart = false, string? Open = null, string? OpenArgs = null, string? OpenAfter = null, bool LaptopOnly = false);
+    string? Confirm = null, bool Restart = false, string? Open = null, string? OpenArgs = null, string? OpenAfter = null, bool LaptopOnly = false,
+    bool Builtin = false);
 
 /// <summary>A shortcut to a built-in Windows tool.</summary>
 public sealed record WinTool(string Name, string Glyph, string Target, string? Args = null);
@@ -56,6 +57,10 @@ public static class UtilityCatalog
                 new UtilStep("Repair system files", "sfc.exe", "/scannow", Unicode: true),
             },
             Confirm: "This takes 10 to 30 minutes and needs an internet connection for the repair step. You can keep using the PC, but leave TrapShack open."),
+        new("repair-tweaks", "Repair Windows", "Repair harmful tweaks",
+            "Finds changes other tweak tools and guides make that break Windows or hurt games (disabled core services, bad boot settings, " +
+            "the page file switched off and more) and puts each one back to Windows' default. Shows what it found first; changes nothing unless you say so.",
+            "", Array.Empty<UtilStep>(), Builtin: true),
         new("sfc", "Repair Windows", "Quick system file check",
             "Runs System File Checker on its own. Finds and replaces damaged Windows files. About 5 to 15 minutes.",
             "", new[] { new UtilStep("Repair system files", "sfc.exe", "/scannow", Unicode: true) }),

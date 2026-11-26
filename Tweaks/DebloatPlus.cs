@@ -53,6 +53,11 @@ public static partial class Catalog
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", @"DefaultBrowserSettingsCampaignEnabled", 0, RegistryValueKind.DWord, null),
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", @"SpotlightExperiencesAndRecommendationsEnabled", 0, RegistryValueKind.DWord, null),
                 new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", @"ShowAcrobatSubscriptionButton", 0, RegistryValueKind.DWord, null))),
+        // The two Microsoft Edge values in the debloat source's "Disable telemetry" (Disable_Telemetry.reg).
+        Mk("rd.edge-diagnostics", Category.Debloat, "", @"Edge diagnostic data off", @"Microsoft Edge stops sending browser diagnostic data and your browsing activity for personalised ads and news.",
+            Always, L(
+                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", @"PersonalizationReportingEnabled", 0, RegistryValueKind.DWord, null),
+                new RegistryAction(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", @"DiagnosticData", 0, RegistryValueKind.DWord, null))),
         Mk("rd.click-to-do", Category.Debloat, "", @"Click to Do off", @"Turns off Click to Do, the AI text and image analysis on Copilot+ PCs.",
             s => s.Build >= 22621 ? Verdict.Rec() : Verdict.No("Needs Windows 11 22H2 or newer."), L(
                 new RegistryAction(RegistryHive.CurrentUser, @"Software\Policies\Microsoft\Windows\WindowsAI", @"DisableClickToDo", 1, RegistryValueKind.DWord, null),

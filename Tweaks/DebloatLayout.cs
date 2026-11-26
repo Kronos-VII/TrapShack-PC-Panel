@@ -13,8 +13,8 @@ public static partial class Catalog
     {
         ("Privacy & suggested content", "\uE72E", new[]
         {
-            "extra.telemetry", "extra.activity", "rd.suggestions", "rd.lockscreen-tips", "extra.location", "rd.find-my-device",
-            "extra.tweaksconsumerfeatures", "clean.lockscreen", "clean.oosu",
+            "clean.oosu", "extra.telemetry", "extra.activity", "rd.suggestions", "rd.lockscreen-tips", "extra.location", "rd.find-my-device",
+            "extra.tweaksconsumerfeatures", "clean.lockscreen",
         }),
         ("Windows AI", "\uE794", new[]
         {
@@ -28,7 +28,7 @@ public static partial class Catalog
         }),
         ("Taskbar", "\uE75B", new[]
         {
-            "clean.widgets", "rd.hide-chat", "custom.taskview", "custom.taskbar-left", "essential.end-task", "rd.last-active-click",
+            "clean.widgets", "rd.hide-chat", "custom.taskview", "essential.end-task", "rd.last-active-click",
             "extra.togglebatterypercentage", "@Taskbar search", "@Combine taskbar buttons", "@Combine buttons on other screens", "@Show taskbar apps on",
         }),
         ("File Explorer", "\uEC50", new[]
@@ -62,7 +62,7 @@ public static partial class Catalog
         }),
         ("Browsers & apps", "\uE774", new[]
         {
-            "browsers.edge-debloat", "rd.edge-ads", "browsers.edge-remove", "browsers.brave-debloat", "clean.new-outlook", "debloat.onedrive",
+            "browsers.edge-debloat", "rd.edge-ads", "rd.edge-diagnostics", "browsers.edge-remove", "browsers.brave-debloat", "clean.new-outlook", "debloat.onedrive",
             "clean.razer-block", "clean.logi-block", "clean.adobe-block",
         }),
         ("Network", "\uE701", new[]
@@ -76,7 +76,13 @@ public static partial class Catalog
     };
 
     /// <summary>Settings that a drop-down on the Debloat page now covers; they are left out of the app.</summary>
-    static readonly HashSet<string> Superseded = new() { "custom.taskbar-search" };
+    static readonly HashSet<string> Superseded = new()
+    {
+        "custom.taskbar-search",
+        // The same service as "AI service starts only when needed" on the Debloat page, but set to Disabled instead of
+        // Manual. With both switched on they undid each other, so one always read as off. The Debloat one stays.
+        "opt.gaming-ai-fabric-service",
+    };
 
     /// <summary>Moves the listed tweaks onto the Debloat page, in the order above.</summary>
     static List<Tweak> ApplyDebloatLayout(List<Tweak> all)

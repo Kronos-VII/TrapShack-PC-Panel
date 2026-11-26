@@ -56,7 +56,7 @@ public static class Updater
                 var name = a.GetProperty("name").GetString() ?? "";
                 if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) { url = a.GetProperty("browser_download_url").GetString(); break; }
             }
-        if (url == null) throw new InvalidOperationException("Release " + tag + " has no .exe file attached.");
+        if (url == null) throw new InvalidOperationException("The newest release on GitHub has no program attached yet.");
         var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
         return new UpdateInfo(latest, tag, url, notes);
     }

@@ -198,6 +198,143 @@ public sealed class RegistryDeleteAction : TweakAction
     public override void Revert(string? saved) => _inner.Revert(saved);
 }
 
+/// <summary>
+/// Sets or clears one bit of a binary registry value (Windows keeps several visual effects as bits of
+/// UserPreferencesMask). Only that bit is touched, so several of these can share one value; switching off puts
+/// exactly that bit back.
+/// </summary>
+public sealed class RegistryBitAction : TweakAction
+{
+    readonly RegistryHive _hive;
+    readonly string _path, _name;
+    readonly int _index;
+    readonly byte _mask;
+    readonly bool _set, _defaultSet;
+
+    /// <param name="set">True sets the bit, false clears it.</param>
+    /// <param name="defaultSet">The bit as Windows ships it (used only if no backup exists).</param>
+    public RegistryBitAction(RegistryHive hive, string path, string name, int byteIndex, byte mask, bool set, bool defaultSet)
+    {
+        _hive = hive; _path = path; _name = name; _index = byteIndex; _mask = mask; _set = set; _defaultSet = defaultSet;
+    }
+
+    string HiveName => _hive switch { RegistryHive.LocalMachine => "HKLM", RegistryHive.Users => "HKU", _ => "HKCU" };
+
+    public override string Describe() => $"{HiveName}\\{_path}  →  {_name} byte {_index} bit 0x{_mask:X2} {(_set ? "on" : "off")}";
+
+    bool? Bit()
+    {
+        return RegUtil.Read(_hive, _path, _name) is byte[] b && b.Length > _index ? (b[_index] & _mask) != 0 : null;
+    }
+
+    public override bool IsApplicable() => RegUtil.Read(_hive, _path, _name) is byte[] b && b.Length > _index;
+
+    public override bool IsApplied() => Bit() == _set;
+
+    public override string? Capture() => Bit() switch { true => "1", false => "0", _ => null };
+
+    public override string? TestState() => Capture();
+
+    void Write(bool on)
+    {
+        using var root = RegUtil.Base(_hive);
+        using var k = root.OpenSubKey(_path, true) ?? throw new InvalidOperationException($"Cannot open {HiveName}\\{_path}");
+        if (k.GetValue(_name) is not byte[] b || b.Length <= _index) throw new InvalidOperationException($"{_name} isn't there to change.");
+        b[_index] = (byte)(on ? b[_index] | _mask : b[_index] & ~_mask);
+        k.SetValue(_name, b, RegistryValueKind.Binary);
+    }
+
+    public override void Apply() => Write(_set);
+
+    public override void Revert(string? saved) => Write(saved == null ? _defaultSet : saved == "1");
+}
+
+/// <summary>
+/// Makes a registry key exist or not exist (some Explorer items, such as the folders under This PC, are shown only
+/// while their key is there). Switching off puts back whether it was there.
+/// </summary>
+public sealed class RegistryKeyAction : TweakAction
+{
+    readonly RegistryHive _hive;
+    readonly string _path;
+    readonly bool _present;
+
+    public RegistryKeyAction(RegistryHive hive, string path, bool present) { _hive = hive; _path = path; _present = present; }
+
+    string HiveName => _hive switch { RegistryHive.LocalMachine => "HKLM", RegistryHive.Users => "HKU", _ => "HKCU" };
+
+    public override string Describe() => $"{HiveName}\\{_path}  →  key {(_present ? "added" : "removed")}";
+
+    public override bool IsApplied() => RegUtil.KeyExists(_hive, _path) == _present;
+
+    /// <summary>"absent", or "present" followed by the key's own values, so switching off puts back exactly that.</summary>
+    public override string? Capture()
+    {
+        using var root = RegUtil.Base(_hive);
+        using var k = root.OpenSubKey(_path);
+        if (k == null) return "absent";
+        var sb = new StringBuilder("present");
+        foreach (var name in k.GetValueNames())
+        {
+            var kind = k.GetValueKind(name);
+            var v = k.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            var payload = v switch
+            {
+                byte[] b => Convert.ToBase64String(b),
+                string[] m => Convert.ToBase64String(Encoding.UTF8.GetBytes(string.Join("\n", m))),
+                _ => Convert.ToBase64String(Encoding.UTF8.GetBytes(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) ?? "")),
+            };
+            sb.Append('\n').Append(Convert.ToBase64String(Encoding.UTF8.GetBytes(name))).Append('|').Append(kind).Append('|').Append(payload);
+        }
+        return sb.ToString();
+    }
+
+    public override string? TestState() => Capture();
+
+    public override void Apply()
+    {
+        using var root = RegUtil.Base(_hive);
+        if (_present) { using var k = root.CreateSubKey(_path, true); return; }
+        using (var k = root.OpenSubKey(_path))
+        {
+            if (k == null) return;
+            // only a key without sub-keys is removed, so nothing that couldn't be put back is ever lost
+            if (k.SubKeyCount > 0) throw new InvalidOperationException($"{HiveName}\\{_path} has sub-keys, so it was left alone.");
+        }
+        root.DeleteSubKey(_path, false);
+    }
+
+    public override void Revert(string? saved)
+    {
+        using var root = RegUtil.Base(_hive);
+        if (saved == null) saved = _present ? "absent" : "present";
+        if (saved == "absent")
+        {
+            using (var k = root.OpenSubKey(_path)) { if (k == null || k.SubKeyCount > 0) return; }
+            root.DeleteSubKey(_path, false);
+            return;
+        }
+        using var key = root.CreateSubKey(_path, true);
+        foreach (var line in saved.Split('\n').Skip(1))
+        {
+            var parts = line.Split('|');
+            if (parts.Length != 3) continue;
+            var name = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+            var kind = Enum.Parse<RegistryValueKind>(parts[1]);
+            var raw = Convert.FromBase64String(parts[2]);
+            object value = kind switch
+            {
+                RegistryValueKind.Binary => raw,
+                RegistryValueKind.DWord => int.Parse(Encoding.UTF8.GetString(raw), System.Globalization.CultureInfo.InvariantCulture),
+                RegistryValueKind.QWord => long.Parse(Encoding.UTF8.GetString(raw), System.Globalization.CultureInfo.InvariantCulture),
+                RegistryValueKind.MultiString => Encoding.UTF8.GetString(raw).Split('\n'),
+                _ => Encoding.UTF8.GetString(raw),
+            };
+            key.SetValue(name, value, kind);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Services
 // ---------------------------------------------------------------------------------------------
@@ -212,16 +349,22 @@ public sealed class ServiceAction : TweakAction
     /// <param name="windowsDefault">
     /// Startup type Windows ships with (sc.exe words: auto, delayed-auto, demand). Used only if no backup exists.
     /// </param>
-    public ServiceAction(string serviceName, string targetMode = Disabled, string windowsDefault = "demand")
+    readonly Func<bool>? _applicable;
+
+    /// <param name="applicable">Optional extra condition: when it returns false this part is left out on this PC.</param>
+    public ServiceAction(string serviceName, string targetMode = Disabled, string windowsDefault = "demand", Func<bool>? applicable = null)
     {
-        _name = serviceName; _target = targetMode; _windowsDefault = windowsDefault;
+        _name = serviceName; _target = targetMode; _windowsDefault = windowsDefault; _applicable = applicable;
     }
+
+    /// <summary>The service this changes (the repair tool leaves services TrapShack manages alone).</summary>
+    public string ServiceName => _name;
 
     string KeyPath => $@"SYSTEM\CurrentControlSet\Services\{_name}";
 
     public override string Describe() => $"Service \"{_name}\"  →  startup type: {_target}";
 
-    public override bool IsApplicable() => RegUtil.KeyExists(RegistryHive.LocalMachine, KeyPath);
+    public override bool IsApplicable() => RegUtil.KeyExists(RegistryHive.LocalMachine, KeyPath) && (_applicable?.Invoke() ?? true);
 
     /// <summary>Current startup mode in the vocabulary sc.exe understands.</summary>
     string? CurrentMode()

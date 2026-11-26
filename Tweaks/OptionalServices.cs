@@ -9,11 +9,11 @@ public static partial class Catalog
     static IEnumerable<Tweak> OptionalServices()
     {
         yield return Mk("opt.gaming-compatibility-assistant-service", Category.Performance, "System services",
-            "Set Program Compatibility Assistant Service to Disabled",
-            "Monitors programs for compatibility issues and suggests fixes. Disabling prevents compatibility prompts and saves minor system resources",
-            Sometimes,
-            L(new ServiceAction("PcaSvc", "disabled", "auto")),
-            detail: "Monitors programs for compatibility issues and suggests fixes. Disabling prevents compatibility prompts and saves minor system resources. Never part of \"Apply recommended\": the recommended startup for this service is Manual, which is how Windows already ships it. Restore puts the service back to its original startup type.", restart: true);
+            "Set Program Compatibility Assistant Service to Manual",
+            "It no longer runs all the time in the background; it still starts when a program needs it.",
+            Always,
+            L(new ServiceAction("PcaSvc", "demand", "auto")),
+            detail: "Monitors programs for compatibility issues and suggests fixes. Manual means it no longer starts with Windows but still starts when a program needs it. Restore puts the service back to its original startup type.", restart: true);
 
         yield return Mk("opt.gaming-retail-demo-service", Category.Performance, "System services",
             "Set Retail Demo Service to Disabled",
