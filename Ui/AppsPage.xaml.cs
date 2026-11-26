@@ -337,7 +337,12 @@ public partial class AppsPage : UserControl
         if (_host == null || _working || _host.Busy) return;
         if (((FrameworkElement)sender).DataContext is not AppCardVM a) return;
         if (!WingetService.Available) return;
-        if (!Dialogs.Confirm(_host.Win, $"Uninstall {a.Name}?", $"{a.Name} will be removed from this PC. You can install it again from this page.", "Uninstall", "Cancel")) return;
+        // runtimes are what games and programs run on: removing one breaks them, so say so plainly
+        var msg = a.IsDep
+            ? $"{a.Name} is a runtime that games and programs need to start. Anything built on it will stop opening until it is installed again." +
+              "\n\nOnly remove it if you know nothing on this PC uses it. You can install it again from this page."
+            : $"{a.Name} will be removed from this PC. You can install it again from this page.";
+        if (!Dialogs.Confirm(_host.Win, a.IsDep ? $"Remove {a.Name}?" : $"Uninstall {a.Name}?", msg, a.IsDep ? "Remove anyway" : "Uninstall", "Cancel")) return;
 
         _working = true; _host.Busy = true; a.Busy = true; a.Phase = "Removing…";
         var dock = _host.Dock;

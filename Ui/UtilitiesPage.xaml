@@ -45,7 +45,8 @@
 
         <!-- one section: a header line, then its tools in an even grid across the full width -->
         <DataTemplate x:Key="UtilCard" DataType="{x:Type ui:UtilSectionVM}">
-            <StackPanel Margin="0,0,0,16">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentHotBrush}"
@@ -56,12 +57,12 @@
                     </StackPanel>
                     <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource Ink_FF1E1E25}" VerticalAlignment="Center" Margin="14,2,0,0"/>
                 </Grid>
-                <ItemsControl ItemsSource="{Binding Tools}">
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Tools}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="300" Gap="10"/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
-            </StackPanel>
+            </Grid>
         </DataTemplate>
 
         <!-- a Windows tool shortcut -->
@@ -104,11 +105,15 @@
         <Grid Grid.Row="1" Margin="34,0,34,18">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource UtilCard}"/>
+                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource UtilCard}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><ui:GroupPackPanel Columns="3" MinColumnWidth="300" Gap="10" RowGap="18"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
 
                     <!-- Windows tools -->
                     <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14"
-                            Padding="16,12,16,8" Margin="0,0,0,0">
+                            Padding="16,12,16,8" Margin="0,18,0,0">
                         <StackPanel>
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

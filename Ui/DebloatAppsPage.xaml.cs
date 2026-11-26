@@ -54,6 +54,9 @@ public partial class DebloatAppsPage : UserControl
     {
         foreach (var a in apps)
         {
+            // a logo shipped with TrapShack (Assets/AppLogos/<app id>.png) wins: used where the package's own icon is missing or wrong
+            var own = new TileArt(a.Def.Id, a.Name);
+            if (own.Photo != null) { a.Art = own; continue; }
             // an app that is also on the Apps page uses the same brand logo there (Spotify, Teams, WhatsApp ...)
             var twin = AppCatalog.All.FirstOrDefault(d => SameApp(d.Name, a.Name));
             if (twin != null)
@@ -141,7 +144,13 @@ public partial class DebloatAppsPage : UserControl
         PickBar.Visibility = p.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         PickText.Text = $"{p.Count} app{(p.Count == 1 ? "" : "s")} picked";
         var perm = p.Count(a => a.Def.Tier == RemoveTier.Perm);
-        PickSub.Text = perm > 0 ? $"{perm} of them can't be reinstalled once removed."
+        var warn = p.Count(a => a.HasWarning && a.Def.Tier != RemoveTier.Perm);
+        PickSub.Text = perm > 0 || warn > 0
+            ? string.Join("  ·  ", new[]
+              {
+                  perm > 0 ? $"{perm} can't be reinstalled" : null,
+                  warn > 0 ? $"{warn} will change how Windows works" : null,
+              }.Where(x => x != null)) + ". You'll see exactly what before anything is removed."
             : string.Join(", ", p.Take(5).Select(a => a.Name)) + (p.Count > 5 ? $" and {p.Count - 5} more" : "");
         RemoveBtn.Content = $"Remove {p.Count}";
         RemoveBtn.IsEnabled = !_working && p.Count > 0;
@@ -153,13 +162,21 @@ public partial class DebloatAppsPage : UserControl
         var queue = Picked;
         if (queue.Count == 0) return;
 
-        var perm = queue.Where(a => a.Def.Tier == RemoveTier.Perm).Select(a => a.Name).ToList();
-        var core = queue.Where(a => a.Def.Tier == RemoveTier.Core).Select(a => a.Name).ToList();
+        // spell out every consequence before anything is removed
+        var perm = queue.Where(a => a.Def.Tier == RemoveTier.Perm).ToList();
+        var warned = queue.Where(a => a.HasWarning && a.Def.Tier != RemoveTier.Perm).ToList();
+        var core = queue.Where(a => a.Def.Tier == RemoveTier.Core && !a.HasWarning).Select(a => a.Name).ToList();
+        var risky = perm.Count > 0 || warned.Count > 0 || core.Count > 0;
         var msg = $"{queue.Count} app{(queue.Count == 1 ? "" : "s")} will be removed from this PC.";
-        if (perm.Count > 0) msg += $"\n\nThese can't be reinstalled, because Microsoft no longer offers them:\n•  {string.Join("\n•  ", perm)}";
-        if (core.Count > 0) msg += $"\n\nThese are part of everyday Windows. You can get them back from the Microsoft Store:\n•  {string.Join("\n•  ", core)}";
-        msg += "\n\nThe rest can be reinstalled from the Microsoft Store whenever you want.";
-        if (!Dialogs.Confirm(_host.Win, "Remove these apps?", msg, "Remove", "Cancel")) return;
+        if (perm.Count > 0)
+            msg += "\n\nCAN'T BE BROUGHT BACK\nMicrosoft no longer offers these, so they can't be reinstalled:\n•  " + string.Join("\n•  ", perm.Select(a => a.Name));
+        if (warned.Count > 0)
+            msg += "\n\nWHAT WILL STOP WORKING\n" + string.Join("\n", warned.Select(a => $"•  {a.Name}: {a.Warning}"));
+        if (core.Count > 0)
+            msg += "\n\nEVERYDAY WINDOWS APPS\nYou can get these back from the Microsoft Store:\n•  " + string.Join("\n•  ", core);
+        msg += risky ? "\n\nA restore point doesn't bring removed apps back. Only continue if you're sure."
+                     : "\n\nAll of them can be reinstalled from the Microsoft Store whenever you want.";
+        if (!Dialogs.Confirm(_host.Win, risky ? "Check before removing" : "Remove these apps?", msg, risky ? "Remove anyway" : "Remove", "Cancel")) return;
 
         _working = true; _host.Busy = true;
         foreach (var a in queue) { a.Busy = true; }

@@ -40,18 +40,39 @@ public sealed class MasonryPanel : Panel
         var width = double.IsInfinity(available.Width) ? Columns * MinColumnWidth + (Columns - 1) * Gap : available.Width;
         var cols = ColumnsFor(width);
         var colW = Math.Max(0, (width - Gap * (cols - 1)) / cols);
-        var heights = new double[cols];
-        foreach (UIElement child in InternalChildren)
+        var kids = InternalChildren.Cast<UIElement>().ToList();
+        foreach (var k in kids) k.Measure(k.Visibility == Visibility.Collapsed ? new Size(0, 0) : new Size(colW, double.PositiveInfinity));
+
+        // Balance the columns: biggest cards first, each into the shortest column. Inside a column the cards keep
+        // their original order, so the page still reads top to bottom.
+        var columns = Enumerable.Range(0, cols).Select(_ => new List<int>()).ToArray();
+        var sums = new double[cols];
+        foreach (var i in Enumerable.Range(0, kids.Count).Where(i => kids[i].Visibility != Visibility.Collapsed)
+                                    .OrderByDescending(i => kids[i].DesiredSize.Height))
         {
-            if (child.Visibility == Visibility.Collapsed) { _slots.Add(Rect.Empty); continue; }
-            child.Measure(new Size(colW, double.PositiveInfinity));
-            var c = Array.IndexOf(heights, heights.Min());
-            var y = heights[c];
-            _slots.Add(new Rect(c * (colW + Gap), y, colW, child.DesiredSize.Height));
-            heights[c] = y + child.DesiredSize.Height + Gap;
+            var c = Array.IndexOf(sums, sums.Min());
+            columns[c].Add(i);
+            sums[c] += kids[i].DesiredSize.Height + Gap;
         }
-        var total = heights.Length == 0 ? 0 : Math.Max(0, heights.Max() - Gap);
-        return new Size(width, total);
+        // keep the first card (and the general order) on the left
+        columns = columns.Where(c => c.Count > 0).OrderBy(c => c.Min()).Concat(columns.Where(c => c.Count == 0)).ToArray();
+
+        for (var i = 0; i < kids.Count; i++) _slots.Add(Rect.Empty);
+        var tallest = columns.Select(c => c.Sum(i => kids[i].DesiredSize.Height) + Gap * Math.Max(0, c.Count - 1)).DefaultIfEmpty(0).Max();
+        for (var c = 0; c < columns.Length; c++)
+        {
+            var list = columns[c].OrderBy(i => i).ToList();
+            double y = 0;
+            for (var n = 0; n < list.Count; n++)
+            {
+                var h = kids[list[n]].DesiredSize.Height;
+                // the last card in each column grows so every column ends on the same line
+                if (n == list.Count - 1) h = Math.Max(h, tallest - y);
+                _slots[list[n]] = new Rect(c * (colW + Gap), y, colW, h);
+                y += h + Gap;
+            }
+        }
+        return new Size(width, tallest);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -102,6 +123,16 @@ public sealed class ChoiceVM : Notify
     public List<ChoiceOptionVM> Options { get; }
     public bool CanPick => Options.Any(o => o.Vm.CanToggle);
     public string Tip => Options.FirstOrDefault()?.Vm.T.Detail ?? "";
+    public string Glyph => Options.Count > 0 ? TweakGlyph.For(Options[0].Vm.T) : "\uE713";
+    /// <summary>The line under the name: how many choices, and which one Windows uses on its own.</summary>
+    public string Sub
+    {
+        get
+        {
+            var def = Options.FirstOrDefault(o => o.IsDefault)?.Label;
+            return $"{Options.Count} choices" + (def != null ? $"  ·  Windows default: {def.Replace(" (default)", "")}" : "");
+        }
+    }
 
     string _selected = "";
     public string SelectedLabel { get => _selected; private set => Set(ref _selected, value); }

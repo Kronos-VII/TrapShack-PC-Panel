@@ -24,8 +24,9 @@ public sealed class UtilVM : Notify
     public bool CanRun => OpensWindow || !_blocked;
 }
 
-public sealed class UtilSectionVM
+public sealed class UtilSectionVM : IPackCount
 {
+    public int PackCount => Tools.Count;
     public string Name { get; init; } = "";
     public string Glyph { get; init; } = "";
     public string Blurb { get; init; } = "";

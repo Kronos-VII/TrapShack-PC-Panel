@@ -41,6 +41,15 @@ public static class TweakGlyph
         (new[] { "privacy", "permission", "access", "activity", "history", "tracking" }, ""),
     };
 
+    /// <summary>An icon for a whole group: from its name when that says what it is, else the icon most of its settings use.</summary>
+    public static string ForGroup(string group, IReadOnlyCollection<TweakVM> items)
+    {
+        var text = " " + group.ToLowerInvariant() + " ";
+        foreach (var (words, glyph) in Map)
+            if (words.Any(w => text.Contains(w))) return glyph;
+        return items.Count == 0 ? "\uE713" : items.GroupBy(v => v.RowGlyph).OrderByDescending(g => g.Count()).First().Key;
+    }
+
     public static string For(TrapShack.Core.Tweak t)
     {
         var text = " " + (t.Id + " " + t.Title + " " + t.Group).ToLowerInvariant() + " ";

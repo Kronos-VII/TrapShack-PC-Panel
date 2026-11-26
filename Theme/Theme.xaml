@@ -67,6 +67,9 @@
     <SolidColorBrush x:Key="Ink_FF1D1D24" Color="#FF1D1D24"/>
     <SolidColorBrush x:Key="Ink_FF1E1812" Color="#FF1E1812"/>
     <SolidColorBrush x:Key="Ink_FF1E1E25" Color="#FF1E1E25"/>
+    <SolidColorBrush x:Key="Ink_FF1F1F26" Color="#FF1F1F26"/>
+    <SolidColorBrush x:Key="Ink_FFC4C4CD" Color="#FFC4C4CD"/>
+    <SolidColorBrush x:Key="Ink_FFD7D7DE" Color="#FFD7D7DE"/>
     <SolidColorBrush x:Key="Ink_FF1F4A33" Color="#FF1F4A33"/>
     <SolidColorBrush x:Key="Ink_FF241E10" Color="#FF241E10"/>
     <SolidColorBrush x:Key="Ink_FF24242B" Color="#FF24242B"/>
@@ -609,6 +612,80 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+
+    <!-- ============================== LIST PAGES: shared row shell and category list ============================== -->
+    <!-- the shell every row shares -->
+    <Style x:Key="RowShell" TargetType="Border">
+        <Setter Property="Height" Value="64"/>
+        <Setter Property="Padding" Value="14,0,12,0"/>
+        <Setter Property="CornerRadius" Value="11"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushSoft}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Ink_FF3A3A45}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- one entry in a page's category list -->
+    <Style x:Key="RailButton" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,0,0,2"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Height="40" CornerRadius="9" Padding="12,0" Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="G" Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource MutedBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,11,0"/>
+                            <TextBlock x:Name="T" Grid.Column="1" Text="{Binding Title}" FontSize="13" Foreground="{DynamicResource Ink_FFC4C4CD}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="C" Grid.Column="2" Text="{Binding CountText}" FontSize="11.5" Foreground="{DynamicResource FaintBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Ink_FF141418}"/>
+                            <Setter TargetName="T" Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Ink_FF2E2E37}"/>
+                            <Setter TargetName="G" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                            <Setter TargetName="T" Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                            <Setter TargetName="T" Property="FontWeight" Value="SemiBold"/>
+                            <Setter TargetName="C" Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
+                            <Setter TargetName="C" Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RailLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource FaintBrush}"/>
+        <Setter Property="Margin" Value="12,0,0,8"/>
+    </Style>
+
+    <Style x:Key="SectionLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource FaintBrush}"/>
+        <Setter Property="Margin" Value="2,24,0,10"/>
+    </Style>
+
+    <!-- Page title block used by every page -->
+    <Style x:Key="PageTitleText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="26"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
 </ResourceDictionary>

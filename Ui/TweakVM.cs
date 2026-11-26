@@ -89,11 +89,26 @@ public sealed class TweakVM : INotifyPropertyChanged
     public bool HasTags => Tags.Length > 0;
     public bool HasFooter => FitText.Length > 0 || HasTags;
 
+    /// <summary>
+    /// The one label a row shows, most important first: not available, caution, recommended (while off), advanced,
+    /// then what it needs afterwards. "rec" is red, "warn" amber, "info" grey, "" none.
+    /// </summary>
+    public (string Text, string Kind) RowTag =>
+        DisplayFit == Fit.Unavailable ? ("Not available", "info") :
+        DisplayFit == Fit.Caution ? ("Caution", "warn") :
+        DisplayFit == Fit.Recommended ? ("Recommended", "rec") :
+        IsAdvanced ? ("Advanced", "warn") :
+        T.RestartRequired ? ("Restart", "info") :
+        T.SignOutRequired ? ("Sign-out", "info") :
+        T.StoreRestore ? ("Store reinstall", "info") : ("", "");
+    public string Label => RowTag.Text;
+    public string LabelKind => RowTag.Kind;
+
     public void SetOn(bool on)
     {
         _isOn = on;
         // Always raise, even if the value is unchanged, so a ToggleButton the user clicked snaps back to the real state.
-        foreach (var name in new[] { nameof(IsOn), nameof(CanToggle), nameof(FitKind), nameof(FitText), nameof(Note), nameof(HasNote), nameof(HasFooter) })
+        foreach (var name in new[] { nameof(IsOn), nameof(CanToggle), nameof(FitKind), nameof(FitText), nameof(Note), nameof(HasNote), nameof(HasFooter), nameof(Label), nameof(LabelKind) })
             Raise(name);
     }
 

@@ -30,7 +30,7 @@ public partial class MainWindow : Window, IPageHost
     readonly Dictionary<string, RadioButton> _navByKey = new();
     bool _loaded;
     bool _busy;
-    bool _searching, _sectionInit, _restartArmed;
+    bool _searching, _restartArmed;
     readonly HashSet<string> _restartIds = new();
     string? _restartNote;
 
@@ -68,6 +68,20 @@ public partial class MainWindow : Window, IPageHost
     async void OnLoaded(object sender, RoutedEventArgs e)
     {
         var clock = Stopwatch.StartNew();
+        // Home's "can be freed" figure: the last result shows at once, and a fresh scan starts right away, alongside
+        // the rest of the startup work, instead of waiting until the app is open.
+        CleanerPanel.Measured += total =>
+        {
+            HomeCleanSize.Text = CleanScan.Format(total);
+            HomeCleanText.Text = total > 0 ? "Temporary files and caches the PC Cleaner found. Nothing is deleted until you press Clean." : "Nothing to clean right now.";
+            _settings.LastCleanBytes = total; _settings.LastCleanAt = DateTime.Now; _settings.Save();
+        };
+        if (_settings.LastCleanBytes >= 0)
+        {
+            HomeCleanSize.Text = CleanScan.Format(_settings.LastCleanBytes);
+            HomeCleanText.Text = "From the last scan. Checking again now…";
+        }
+        var cleanerScan = QuietCleanerScanAsync();
         try
         {
             SetSplash("Detecting your hardware…", 0.14);
@@ -82,7 +96,9 @@ public partial class MainWindow : Window, IPageHost
 
             SetSplash("Reading what is already applied…", 0.9);
             // What is ALREADY applied on this PC, whoever applied it.
-            var states = await Task.Run(() => _vms.Select(v => _engine.IsApplied(v.T)).ToList());
+            // read in parallel: each setting is checked on its own, so this is several times faster than one by one
+            var states = await Task.Run(() => _vms.AsParallel().AsOrdered().WithDegreeOfParallelism(Math.Clamp(Environment.ProcessorCount, 2, 8))
+                                                  .Select(v => { try { return _engine.IsApplied(v.T); } catch { return false; } }).ToList());
             for (var i = 0; i < _vms.Count; i++) _vms[i].SetOn(states[i]);
             BuildClashMap();
         }
@@ -102,12 +118,6 @@ public partial class MainWindow : Window, IPageHost
         _ = AppsPanel.ScanAsync();
         PreloadSystemInfo();
         UtilitiesPanel.Init(this, _sys.IsLaptop);
-        CleanerPanel.Measured += total =>
-        {
-            HomeCleanSize.Text = CleanScan.Format(total);
-            HomeCleanText.Text = total > 0 ? "Temporary files and caches the PC Cleaner found. Nothing is deleted until you press Clean." : "Nothing to clean right now.";
-        };
-        _ = QuietCleanerScanAsync();
         SidebarSystem.Text = $"{_sys.OsName}\n{_sys.CpuBrand} · {GpuBrand}";
         Navigate("home");
         FadeOutSplash();
@@ -227,6 +237,7 @@ public partial class MainWindow : Window, IPageHost
     {
         _navKeys[NavHome] = "home"; _navByKey["home"] = NavHome;
         _navKeys[NavSystem] = "system"; _navByKey["system"] = NavSystem;
+        _navKeys[NavTemps] = "temps"; _navByKey["temps"] = NavTemps;
         _navKeys[NavSettings] = "settings"; _navByKey["settings"] = NavSettings;
 
         RadioButton Add(string key, string title, string glyph, bool sub)
@@ -280,7 +291,7 @@ public partial class MainWindow : Window, IPageHost
     /// <summary>Shows one panel and hides the others.</summary>
     void ShowPanel(UIElement panel)
     {
-        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel, UtilitiesPanel, StartupPanel, RestorePanel })
+        foreach (UIElement p in new UIElement[] { HomePanel, SystemPanel, MonitorPanel, SearchPanel, HubPanel, TweakPanel, SettingsPanel, AppsPanel, DebloatAppsPanel, CleanerPanel, UtilitiesPanel, StartupPanel, RestorePanel })
             p.Visibility = ReferenceEquals(p, panel) ? Visibility.Visible : Visibility.Collapsed;
         panel.BeginAnimation(OpacityProperty, null);   // pages switch instantly; the cards inside do a short rise
     }
@@ -295,6 +306,7 @@ public partial class MainWindow : Window, IPageHost
         {
             case "home": ShowPanel(HomePanel); RefreshHome(); break;
             case "system": ShowSystem(); break;
+            case "temps": ShowPanel(MonitorPanel); MonitorPanel.Show(); break;
             case "settings": ShowPanel(SettingsPanel); BuildSwatches(); ShowRestorePointSetting(); ShowUpdateSetting(); break;
             case "apps": ShowPanel(AppsPanel); _ = AppsPanel.ScanAsync(); break;
             case "winapps": ShowPanel(DebloatAppsPanel); _ = DebloatAppsPanel.LoadAsync(); break;
@@ -320,8 +332,9 @@ public partial class MainWindow : Window, IPageHost
         PageCrumb.Cursor = area ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
         PageTitle.Text = page.Title;
         PageSubtitle.Text = page.Subtitle;
-        _groupFilter = null;
+        _cat = null;
         SearchBox.Text = "";
+        TweakScroll.ScrollToTop();
 
         ApplyPageView();
         UpdatePageProgress();
@@ -358,10 +371,70 @@ public partial class MainWindow : Window, IPageHost
         ApplyPageView();
     }
 
-    /// <summary>
-    /// Builds the grouped list for the current page, narrowed by the search box. The list is rebuilt on every change so
-    /// that, while searching, folded sections open up and show their matches.
-    /// </summary>
+    // =============================================================================================
+    // List pages (Debloat and every Optimizations page): categories on the left, the chosen one on the right
+    // =============================================================================================
+
+    /// <summary>One entry in a page's category list.</summary>
+    public sealed class RailItem : Notify
+    {
+        public string Key { get; init; } = "";
+        public string Title { get; init; } = "";
+        public string Glyph { get; init; } = "";
+        public List<TweakVM> Items { get; init; } = new();
+        bool _sel; string _count = "";
+        public bool Selected { get => _sel; set => Set(ref _sel, value); }
+        public string CountText { get => _count; private set => Set(ref _count, value); }
+        public void Refresh()
+        {
+            var sw = Items.Where(v => !v.T.OneShot && v.T.ChoiceGroup == null).ToList();
+            CountText = sw.Count == 0 ? $"{Items.Count}" : $"{sw.Count(v => v.IsOn)}/{sw.Count}";
+        }
+    }
+
+    string? _cat;                          // the category shown on the current page
+    List<RailItem> _rail = new();
+    List<object> _rows = new();
+
+    /// <summary>The categories of a page, in their natural order, each with an icon.</summary>
+    List<RailItem> BuildRail(string key, List<TweakVM> pageItems)
+    {
+        var list = new List<RailItem>();
+        if (key == "debloat")
+        {
+            foreach (var (section, glyph, _) in Catalog.DebloatLayout)
+            {
+                var items = pageItems.Where(v => v.Group == section).ToList();
+                if (items.Count > 0) list.Add(new RailItem { Key = section, Title = section, Glyph = glyph, Items = items });
+            }
+        }
+        foreach (var g in pageItems.Select(v => v.Group).Distinct())
+        {
+            if (list.Any(r => r.Key == g)) continue;
+            var items = pageItems.Where(v => v.Group == g).ToList();
+            list.Add(new RailItem { Key = g, Title = g, Glyph = TweakGlyph.ForGroup(g, items), Items = items });
+        }
+        foreach (var r in list) r.Refresh();
+        return list;
+    }
+
+    /// <summary>Rows for a set of settings: settings that share one Windows value become one drop-down row.</summary>
+    static List<object> BuildRows(IEnumerable<TweakVM> items, Func<TweakVM, bool> hit, string q)
+    {
+        var all = items.ToList();
+        var rows = new List<object>();
+        var done = new HashSet<string>();
+        foreach (var v in all)
+        {
+            var g = v.T.ChoiceGroup;
+            if (g == null) { if (hit(v)) rows.Add(v); continue; }
+            if (!done.Add(v.Group + "|" + g)) continue;
+            var opts = all.Where(o => o.T.ChoiceGroup == g && o.Group == v.Group).ToList();
+            if (q.Length == 0 || g.Contains(q, StringComparison.OrdinalIgnoreCase) || opts.Any(hit)) rows.Add(new ChoiceVM(g, opts));
+        }
+        return rows;
+    }
+
     void ApplyPageView()
     {
         if (_page == null || _vms == null) return;
@@ -369,77 +442,84 @@ public partial class MainWindow : Window, IPageHost
         var key = _page.Key;
         var pageItems = _vms.Where(v => v.PageKey == key).ToList();
         _searching = q.Length > 0;
-        var cards = key == "debloat";   // the Debloat page is laid out as category cards; every other page as tiles
+        QuickBtnText.Text = key == "debloat" ? "Quick select" : "Quick actions";
 
-        // group chips: "All" plus one per group, so a long page can be narrowed to one group
-        var groups = cards
-            ? Catalog.DebloatLayout.Select(l => l.Section).Where(g => pageItems.Any(v => v.Group == g)).ToList()
-            : pageItems.Select(v => v.Group).Distinct().ToList();
-        if (_groupFilter != null && !groups.Contains(_groupFilter)) _groupFilter = null;
-        var filter = _searching ? null : _groupFilter;   // searching always looks through the whole page
-        var chips = new List<GroupChip> { new("All", pageItems.Count, null, filter == null) };
-        chips.AddRange(groups.Select(g => new GroupChip(g, pageItems.Count(v => v.Group == g), g, filter == g)));
-        GroupChips.ItemsSource = chips;
-        GroupChips.Visibility = groups.Count > 1 && !_searching ? Visibility.Visible : Visibility.Collapsed;
+        _rail = BuildRail(key, pageItems);
+        if (_cat == null || _rail.All(r => r.Key != _cat)) _cat = _rail.FirstOrDefault()?.Key;
+        foreach (var r in _rail) r.Selected = !_searching && r.Key == _cat;
+        RailList.ItemsSource = _rail;
+        RailLabel.Text = _rail.Count == 1 ? "1 CATEGORY" : $"{_rail.Count} CATEGORIES";
 
-        var view = new ListCollectionView(pageItems);
-        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TweakVM.Group)));
-        view.Filter = o => o is TweakVM t &&
-            (filter == null || t.Group == filter) &&
-            (q.Length == 0 ||
-             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-             t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-             (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
-        PanelScroll.Visibility = cards ? Visibility.Visible : Visibility.Collapsed;
-        TweakScroll.Visibility = cards ? Visibility.Collapsed : Visibility.Visible;
-        QuickBtnText.Text = cards ? "Quick select" : "Quick actions";
-        if (cards) { TweakList.ItemsSource = null; BuildDebloatCards(q, filter); return; }
-        PanelList.ItemsSource = null;
-        TweakList.ItemsSource = view;
-    }
-
-    List<DebloatCategoryVM> _cards = new();
-
-    string? _groupFilter;
-    public sealed record GroupChip(string Title, int Count, string? Key, bool Selected);
-
-    void OnGroupChip(object sender, RoutedEventArgs e)
-    {
-        if (((FrameworkElement)sender).DataContext is not GroupChip c || c.Key == _groupFilter) return;
-        _groupFilter = c.Key;
-        ApplyPageView();
-        TweakScroll.ScrollToTop(); PanelScroll.ScrollToTop();
-    }
-
-    /// <summary>Builds the Debloat page: one card per category, in the order of Catalog.DebloatLayout; drop-downs for settings that share one value.</summary>
-    void BuildDebloatCards(string q, string? only = null)
-    {
         bool Hit(TweakVM t) => q.Length == 0 ||
             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || t.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-            (t.T.ChoiceGroup ?? "").Contains(q, StringComparison.OrdinalIgnoreCase);
-        var cards = new List<DebloatCategoryVM>();
-        foreach (var (section, glyph, _) in Catalog.DebloatLayout)
+            (t.T.Detail ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || (t.T.ChoiceGroup ?? "").Contains(q, StringComparison.OrdinalIgnoreCase);
+
+        // searching looks through every category of the page; otherwise only the chosen one shows
+        _rows = _searching
+            ? _rail.SelectMany(r => BuildRows(r.Items, Hit, q)).ToList()
+            : BuildRows(_rail.FirstOrDefault(r => r.Key == _cat)?.Items ?? new List<TweakVM>(), _ => true, "");
+        TweakList.ItemsSource = _rows;
+        PanelEmpty.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateCategoryHeader();
+    }
+
+    /// <summary>The card above the rows: what the category is, how much of it is on, and its one action.</summary>
+    void UpdateCategoryHeader()
+    {
+        if (_page == null) return;
+        var q = SearchBox.Text.Trim();
+        if (_searching)
         {
-            if (only != null && section != only) continue;
-            var items = _vms.Where(v => v.PageKey == "debloat" && v.Group == section).ToList();
-            var rows = new List<object>();
-            var done = new HashSet<string>();
-            foreach (var v in items)
-            {
-                var g = v.T.ChoiceGroup;
-                if (g == null) { if (Hit(v)) rows.Add(v); continue; }
-                if (!done.Add(g)) continue;
-                var opts = items.Where(o => o.T.ChoiceGroup == g).ToList();
-                if (q.Length == 0 || g.Contains(q, StringComparison.OrdinalIgnoreCase) || opts.Any(Hit)) rows.Add(new ChoiceVM(g, opts));
-            }
-            if (rows.Count == 0) continue;
-            var card = new DebloatCategoryVM { Title = section, Glyph = glyph, Rows = rows };
-            card.Refresh();
-            cards.Add(card);
+            CatGlyph.Text = "\uE721";
+            CatTitle.Text = $"Results for \u201c{q}\u201d";
+            CatDesc.Text = _rows.Count == 0 ? "Nothing on this page matches." : $"{_rows.Count} setting{(_rows.Count == 1 ? "" : "s")} found across every category on this page";
+            CatProgress.Visibility = Visibility.Collapsed;
+            CatRecBtn.Visibility = CatRecDone.Visibility = Visibility.Collapsed;
+            return;
         }
-        _cards = cards;
-        PanelList.ItemsSource = cards;
-        PanelEmpty.Visibility = cards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var cat = _rail.FirstOrDefault(r => r.Key == _cat);
+        if (cat == null) return;
+        var sw = cat.Items.Where(v => !v.T.OneShot && v.T.ChoiceGroup == null).ToList();
+        var recTodo = cat.Items.Count(v => v.V.Fit == Fit.Recommended && !v.IsOn && !v.T.OneShot);
+        var recAll = cat.Items.Count(v => v.V.Fit == Fit.Recommended && !v.T.OneShot);
+        CatGlyph.Text = cat.Glyph;
+        CatTitle.Text = cat.Title;
+        CatDesc.Text = $"{cat.Items.Count} setting{(cat.Items.Count == 1 ? "" : "s")}" +
+                       (recAll > 0 ? $"  ·  {recAll} recommended for this PC" : "  ·  nothing here is switched on automatically");
+        CatProgress.Visibility = sw.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var on = sw.Count(v => v.IsOn);
+        CatCount.Inlines.Clear();
+        CatCount.Inlines.Add(new System.Windows.Documents.Run($"{on} of {sw.Count}") { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") });
+        CatCount.Inlines.Add(new System.Windows.Documents.Run(" on"));
+        CatBar.Value = sw.Count == 0 ? 0 : (double)on / sw.Count;
+        CatRecBtn.Content = $"Turn on recommended ({recTodo})";
+        CatRecBtn.Visibility = recTodo > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CatRecDone.Visibility = recTodo == 0 && recAll > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnRailPick(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not RailItem r) return;
+        if (r.Key == _cat && !_searching) return;
+        _cat = r.Key;
+        if (_searching) SearchBox.Text = "";   // re-runs the view
+        else ApplyPageView();
+        TweakScroll.ScrollToTop();
+    }
+
+    async void OnCatRecommended(object sender, RoutedEventArgs e)
+    {
+        if (_page == null || _cat == null) return;
+        var key = _page.Key; var cat = _cat;
+        await ApplyRecommendedAsync(v => v.PageKey == key && v.Group == cat);
+    }
+
+    /// <summary>After any change: the counts in the category list, the drop-downs and the header follow.</summary>
+    void RefreshListPage()
+    {
+        foreach (var r in _rail) r.Refresh();
+        foreach (var c in _rows.OfType<ChoiceVM>()) c.Refresh();
+        UpdateCategoryHeader();
     }
 
     /// <summary>A drop-down option was picked: undo the option in effect (so "undo" later restores the true original), then apply the new one.</summary>
@@ -456,7 +536,7 @@ public partial class MainWindow : Window, IPageHost
         var states = await Task.Run(() => choice.Options.Select(o => _engine.IsApplied(o.Vm.T)).ToList());
         for (var i = 0; i < states.Count; i++) choice.Options[i].Vm.SetOn(states[i]);
         choice.Refresh();
-        foreach (var c in _cards) c.Refresh();
+        RefreshListPage();
     }
 
     static IEnumerable<System.Windows.Controls.Primitives.Popup> FindPopups(DependencyObject? d)
@@ -467,30 +547,6 @@ public partial class MainWindow : Window, IPageHost
             if (d is System.Windows.Controls.Primitives.Popup p) yield return p;
             d = LogicalTreeHelper.GetParent(d) ?? (d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : null);
         }
-    }
-
-    // ---- folding sections (the choice is remembered) ----
-
-    string? SectionKey(object sender) =>
-        sender is FrameworkElement { DataContext: CollectionViewGroup g } && _page != null ? _page.Key + "|" + g.Name : null;
-
-    void OnSectionHeaderLoaded(object sender, RoutedEventArgs e)
-    {
-        var key = SectionKey(sender);
-        if (key == null || sender is not ToggleButton tb) return;
-        _sectionInit = true;
-        tb.IsChecked = _searching || !_settings.ClosedSections.Contains(key);
-        _sectionInit = false;
-    }
-
-    void OnSectionToggled(object sender, RoutedEventArgs e)
-    {
-        if (_sectionInit || _searching) return;
-        var key = SectionKey(sender);
-        if (key == null || sender is not ToggleButton tb) return;
-        if (tb.IsChecked == true) _settings.ClosedSections.Remove(key);
-        else if (!_settings.ClosedSections.Contains(key)) _settings.ClosedSections.Add(key);
-        _settings.Save();
     }
 
     /// <summary>Ctrl+F jumps to the search box of whichever page is showing one.</summary>
@@ -553,11 +609,9 @@ public partial class MainWindow : Window, IPageHost
         var items = _vms.Where(v => v.PageKey == _page.Key).ToList();
         var st = Stats(items);
 
-        BadgeRec.Visibility = st.RecTotal > 0 ? Visibility.Visible : Visibility.Collapsed;
-        BadgeRecText.Text = $"Recommended {st.RecDone}/{st.RecTotal}";
-        BadgeDefText.Text = $"Default {st.Default}/{st.Total}";
-        BadgeCustom.Visibility = st.Custom > 0 ? Visibility.Visible : Visibility.Collapsed;
-        BadgeCustomText.Text = $"Custom {st.Custom}/{st.Total}";
+        StatRec.Text = st.RecTotal > 0 ? $"{st.RecDone} of {st.RecTotal}" : "none here";
+        StatDef.Text = st.Default.ToString();
+        StatCustom.Text = st.Custom.ToString();
     }
 
     /// <summary>Red number beside a sidebar page: how many of its settings are switched on.</summary>
@@ -568,7 +622,7 @@ public partial class MainWindow : Window, IPageHost
         {
             IEnumerable<TweakVM> set = key switch
             {
-                "home" or "system" or "search" or "settings" or "apps" or "winapps" or "cleaner" or "utilities" or "startup" or "restore" => Enumerable.Empty<TweakVM>(),
+                "home" or "system" or "temps" or "search" or "settings" or "apps" or "winapps" or "cleaner" or "utilities" or "startup" or "restore" => Enumerable.Empty<TweakVM>(),
                 "hub" => _vms.Where(v => PageDefs.Get(v.PageKey).Section == PageDefs.Optimizations),
                 _ => _vms.Where(v => v.PageKey == key),
             };
@@ -580,8 +634,7 @@ public partial class MainWindow : Window, IPageHost
     void RefreshViews()
     {
         UpdateNavCounts();
-        foreach (var c in _cards) c.Refresh();
-        if (_page != null) UpdatePageProgress();
+        if (_page != null) { UpdatePageProgress(); RefreshListPage(); }
         else if (_hub) RefreshHub();
         else RefreshHome();
     }
@@ -845,10 +898,10 @@ public partial class MainWindow : Window, IPageHost
 
     void OnHomeClean(object sender, RoutedEventArgs e) => SelectNav("cleaner");
 
-    /// <summary>A few seconds after startup, the cleaner scans quietly (it only reads) so Home can show what a clean would free.</summary>
+    /// <summary>At startup the cleaner scans quietly (it only reads), so Home can show what a clean would free.</summary>
     async Task QuietCleanerScanAsync()
     {
-        await Task.Delay(4000);
+        await Task.Yield();
         try { await CleanerPanel.ScanAsync(); }
         catch (Exception ex) { Log.Error("Background cleaner scan failed: " + ex.Message); }
         if (HomeCleanSize.Text == "…") { HomeCleanSize.Text = "?"; HomeCleanText.Text = "Open the PC Cleaner and press Scan to see it."; }
@@ -1098,7 +1151,7 @@ public partial class MainWindow : Window, IPageHost
             return;
         _closeConfirmed = true;
         StopSensors();
-        _sensors?.Dispose();
+        MonitorPanel.Shutdown();
         Close();
     }
 
@@ -1113,7 +1166,7 @@ public partial class MainWindow : Window, IPageHost
                 "Close anyway", "Wait"))
         { e.Cancel = true; return; }
         StopSensors();
-        _sensors?.Dispose();
+        MonitorPanel.Shutdown();
     }
 
     // =============================================================================================
@@ -1330,83 +1383,29 @@ public partial class MainWindow : Window, IPageHost
     // System info (live sensors) and accent colour
     // =============================================================================================
 
-    Sensors? _sensors;
-    DispatcherTimer? _liveTimer;
-    bool _sensorsStarted;
-    bool _sensorsFailed;
     readonly Settings _settings = Settings.Load();
 
     Task<List<InfoSection>>? _infoTask;
-    Task? _sensorsTask;
 
     /// <summary>Reads hardware details and starts the sensors quietly after startup, so System info opens instantly.</summary>
     void PreloadSystemInfo()
     {
         _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
-        _sensorsTask ??= StartSensorsAsync();
-    }
-
-    async Task StartSensorsAsync()
-    {
-        if (_sensorsStarted) return;
-        _sensorsStarted = true;
-        _sensors = new Sensors();
-        _sensorsFailed = !await Task.Run(() => _sensors.Start());
+        MonitorPanel.Init(_sys);
+        _ = MonitorPanel.Preload();   // the sensor driver takes a moment: start it now so Temperatures opens with figures
     }
 
     async void ShowSystem()
     {
         ShowPanel(SystemPanel);
-        LiveNote.Text = "Reading sensors…";
-        LiveList.ItemsSource = null;
         FillSystemHeader();
 
         // Details were read in the background at startup, so they show at once; sensors were started then too.
         _infoTask ??= Task.Run(() => HardwareInfo.Collect(_sys));
         if (_infoTask.IsCompleted) { try { InfoList.ItemsSource = _infoTask.Result; } catch { } }
-        _sensorsTask ??= StartSensorsAsync();
-        await _sensorsTask;
-
-        if (!SystemPanel.IsVisible) return;   // user already left the page
-        if (_sensorsFailed)
-            LiveNote.Text = "Live sensors could not start on this PC (" + (_sensors?.Problem ?? "unknown reason") + "). System details below still work.";
-        else
-            StartLiveTimer();
-
         try { InfoList.ItemsSource = await _infoTask; }
         catch (Exception ex) { Log.Error("System info failed: " + ex.Message); }
     }
-
-    void StartLiveTimer()
-    {
-        _liveTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _liveTimer.Tick -= OnLiveTick;
-        _liveTimer.Tick += OnLiveTick;
-        _liveTimer.Start();
-        OnLiveTick(null, EventArgs.Empty);
-    }
-
-    bool _liveBusy;
-
-    async void OnLiveTick(object? sender, EventArgs e)
-    {
-        if (_sensors == null || _liveBusy) return;
-        _liveBusy = true;
-        try
-        {
-            var readings = await Task.Run(() => _sensors.Read());
-            if (!SystemPanel.IsVisible) return;
-            LiveList.ItemsSource = GroupReadings(readings);
-            var hasCpuTemp = readings.Any(r => r.Label.StartsWith("CPU") && r.Label.EndsWith("temperature"));
-            LiveNote.Text = readings.Count == 0
-                ? "No sensors reported anything. Virtual machines and some laptops hide them."
-                : hasCpuTemp ? "Updates every second."
-                : "Updates every second. This CPU did not report a temperature; reading it needs the PawnIO driver (pawnio.eu), which can be installed once.";
-        }
-        catch (Exception ex) { Log.Error("Live update failed: " + ex.Message); }
-        finally { _liveBusy = false; }
-    }
-
 
     void FillSystemHeader()
     {
@@ -1424,27 +1423,6 @@ public partial class MainWindow : Window, IPageHost
 
     static string FormatUptime(TimeSpan t) =>
         t.TotalDays >= 1 ? $"{(int)t.TotalDays} d {t.Hours} h" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} h {t.Minutes} min" : $"{t.Minutes} min";
-
-    /// <summary>Groups flat sensor readings into CPU / GPU / memory cards: one headline figure, a usage bar and the rest as rows.</summary>
-    static List<LiveGroup> GroupReadings(List<SensorReading> readings)
-    {
-        static string Cap(string w) => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w[1..];
-        var result = new List<LiveGroup>();
-        // "CPU temperature", "GPU 2 load", "RAM used": everything before the last word names the device.
-        foreach (var g in readings.GroupBy(r => r.Label.Contains(' ') ? r.Label[..r.Label.LastIndexOf(' ')] : r.Label))
-        {
-            var rows = g.ToList();
-            var temp = rows.FirstOrDefault(r => r.Label.EndsWith("temperature"));
-            var load = rows.FirstOrDefault(r => r.Pct >= 0);
-            var head = temp?.Value ?? load?.Value ?? rows[0].Value;
-            var shown = rows.Where(r => r != temp)
-                .Select(r => r with { Label = Cap(r.Label[(r.Label.LastIndexOf(' ') + 1)..]) }).ToList();
-            if (temp != null) shown.Insert(0, new SensorReading("Temperature", temp.Value, temp.Hot));
-            var title = g.Key == "RAM" ? "MEMORY" : g.Key.ToUpperInvariant();
-            result.Add(new LiveGroup(title, head, load?.Pct ?? -1, rows.Any(r => r.Hot), shown.Where(r => r.Value != head).ToList()));
-        }
-        return result;
-    }
 
     // ---------- updates ----------
     UpdateInfo? _update;
@@ -1526,7 +1504,7 @@ public partial class MainWindow : Window, IPageHost
         }
     }
 
-    void StopSensors() => _liveTimer?.Stop();
+    void StopSensors() => MonitorPanel.Hide();
 
     readonly HsvState _hsv = new();
 

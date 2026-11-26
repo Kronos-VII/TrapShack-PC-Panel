@@ -86,11 +86,40 @@ public partial class StartupPage : UserControl
         Refresh();
     }
 
+    /// <summary>What a startup item does that people would miss, matched on its name, publisher and command.</summary>
+    static string? StartupWarning(StartupVM vm)
+    {
+        var t = (vm.Name + " " + vm.E.Publisher + " " + vm.E.Command).ToLowerInvariant();
+        if (t.Contains("securityhealth") || t.Contains("windows security") || t.Contains("defender"))
+            return "This is Windows Security's tray icon and alerts. Protection keeps running, but you won't see warnings about threats or problems.";
+        if (t.Contains("antivirus") || t.Contains("malwarebytes") || t.Contains("avast") || t.Contains("norton") || t.Contains("bitdefender") || t.Contains("kaspersky") || t.Contains("eset") || t.Contains("mcafee"))
+            return "This looks like security software. Switching it off can leave the PC unprotected until you open it yourself.";
+        if (t.Contains("realtek") || t.Contains("rtkaud") || t.Contains("nahimic") || t.Contains("waves") || t.Contains("dolby") || t.Contains("audio"))
+            return "This is part of your sound driver. Audio effects, jack detection or the sound control app may stop working.";
+        if (t.Contains("synaptics") || t.Contains("elan") || t.Contains("touchpad") || t.Contains("precision"))
+            return "This is part of your touchpad driver. Gestures and touchpad settings may stop working.";
+        if (t.Contains("onedrive") || t.Contains("dropbox") || t.Contains("google drive") || t.Contains("icloud"))
+            return "Your files stop syncing until you open the app yourself.";
+        if (t.Contains("nvidia") || t.Contains("amd") || t.Contains("radeon") || t.Contains("intel") || t.Contains("igfx"))
+            return "This belongs to your graphics or chipset driver. Its control panel, hotkeys or overlay may stop working until you open it.";
+        if (t.Contains("logi") || t.Contains("razer") || t.Contains("corsair") || t.Contains("steelseries") || t.Contains("icue") || t.Contains("armoury") || t.Contains("openrgb") || t.Contains("signalrgb"))
+            return "This runs your mouse, keyboard or lighting software. Custom buttons, DPI and RGB settings may not load until you open it.";
+        return null;
+    }
+
     async void OnSwitch(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not StartupVM vm) return;
         var tb = (ToggleButton)sender;
         var want = tb.IsChecked == true;
+        // some startup items do real work: say what stops before switching them off
+        var why = want ? null : StartupWarning(vm);
+        if (why != null && Window.GetWindow(this) is Window w &&
+            !Dialogs.Confirm(w, $"Switch off {vm.Name}?", why + "\n\nYou can switch it back on here any time.", "Switch off", "Keep it on"))
+        {
+            tb.SetCurrentValue(ToggleButton.IsCheckedProperty, vm.Enabled);
+            return;
+        }
         vm.NotBusy = false;
         var err = await Task.Run(() => StartupApps.SetEnabled(vm.E, want));
         vm.NotBusy = true;

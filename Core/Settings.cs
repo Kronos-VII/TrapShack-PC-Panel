@@ -27,6 +27,10 @@ public sealed class Settings
     /// <summary>Show the console under the progress panel (the commands TrapShack runs, live).</summary>
     public bool ShowConsole { get; set; }
 
+    /// <summary>What the last cleaner scan found, so Home can show it the moment the app opens.</summary>
+    public long LastCleanBytes { get; set; } = -1;
+    public DateTime? LastCleanAt { get; set; }
+
     /// <summary>True once the "missing runtimes" note has been dismissed.</summary>
     public bool RuntimeNoticeHidden { get; set; }
 

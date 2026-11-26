@@ -173,20 +173,24 @@
         <ScrollViewer x:Name="Scroller" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="34,0,34,20">
                 <ItemsControl x:Name="Sections">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><ui:GroupPackPanel Columns="3" MinColumnWidth="260" Gap="10" RowGap="14"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="0,0,0,6">
-                                <Grid Margin="2,8,0,9">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                <Grid Margin="2,2,0,9">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource FaintBrush}"/>
                                     <TextBlock Grid.Column="1" Text="{Binding Counter}" FontSize="11.5" Foreground="{DynamicResource FaintBrush}" Margin="10,0,0,0"/>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding Items}">
+                                <ItemsControl Grid.Row="1" ItemsSource="{Binding Items}">
                                     <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="190" Gap="10" RowHeight="76"/></ItemsPanelTemplate>
+                                        <ItemsPanelTemplate><ui:AdaptiveGrid Columns="3" MinItemWidth="260" Gap="10" RowHeight="76"/></ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                 </ItemsControl>
-                            </StackPanel>
+                            </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

@@ -267,5 +267,55 @@ public static class WinAppCatalog
         "WinZipUniversal",
     };
 
-    public static bool IsSafePick(WinAppDef d) => d.Appx.Split('|').Any(a => SafePick.Contains(a.Trim('*')));
+    /// <summary>On the safe list, not a core or optional app, and nothing the user would notice stops working.</summary>
+    public static bool IsSafePick(WinAppDef d)
+    {
+        if (d.Tier is not (RemoveTier.Ok or RemoveTier.Perm)) return false;
+        var names = d.Appx.Split('|').Select(a => a.Trim('*')).ToList();
+        return names.Any(SafePick.Contains) && !names.Any(Warnings.ContainsKey);
+    }
+
+    /// <summary>
+    /// What stops working when an app is removed, in plain words. Shown on the tile and again, in full, before anything
+    /// is removed, so nobody removes something they rely on by accident.
+    /// </summary>
+    static readonly Dictionary<string, string> Warnings = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Microsoft.GamingApp"] = "Game Pass and Microsoft Store PC games need the Xbox app to install, update and sometimes launch.",
+        ["Microsoft.XboxGamingOverlay"] = "Win+G, game clips, screenshots and the performance overlay stop working. Some games use it for Xbox sign-in pop-ups.",
+        ["Microsoft.XboxGameOverlay"] = "Part of Game Bar. Older games use it for Xbox sign-in pop-ups.",
+        ["MicrosoftWindows.Client.WebExperience"] = "The Widgets board on the taskbar stops working.",
+        ["Microsoft.WidgetsPlatformRuntime"] = "Widgets and app widgets stop working.",
+        ["Microsoft.StartExperiencesApp"] = "Powers parts of the Start menu on newer Windows 11 builds. Removing it can break Start's phone and recommendation panels.",
+        ["MicrosoftWindows.CrossDevice"] = "Phone Link, the phone panel in Start and sharing with your phone stop working.",
+        ["Microsoft.YourPhone"] = "Phone Link stops working: no texts, calls or photos from your phone on this PC.",
+        ["Microsoft.Windows.Photos"] = "Pictures lose their default viewer until you install another one.",
+        ["Microsoft.ZuneMusic"] = "Music and many video files lose their default player.",
+        ["Microsoft.ScreenSketch"] = "Win+Shift+S and the Print Screen key stop taking screenshots.",
+        ["Microsoft.WindowsNotepad"] = "Text files lose their default editor.",
+        ["Microsoft.WindowsTerminal"] = "The Terminal app and \"Open in Terminal\" go away. Command Prompt and PowerShell still work.",
+        ["Microsoft.WindowsCalculator"] = "There is no calculator until you reinstall it from the Store.",
+        ["Microsoft.WindowsCamera"] = "The Camera app goes away. Webcams keep working in other apps.",
+        ["Microsoft.Paint"] = "Paint goes away, and images can't be opened in it.",
+        ["Microsoft.WindowsAlarms"] = "Alarms, timers and Clock focus sessions go away.",
+        ["Microsoft.GetHelp"] = "Windows troubleshooters that open Get Help stop working.",
+        ["MicrosoftCorporationII.QuickAssist"] = "You can't get remote help from someone through Quick Assist.",
+        ["Microsoft.OutlookForWindows"] = "The new Outlook goes away. Classic Outlook from Microsoft 365 isn't affected.",
+        ["Microsoft.BingSearch"] = "Web results in Windows Search stop working.",
+        ["Microsoft.SurfaceHub"] = "Surface devices use this app for pen, battery and device settings.",
+        ["Microsoft.RemoteDesktop"] = "You can't connect to other PCs with this Remote Desktop app.",
+        ["MicrosoftCorporationII.Windows365"] = "You can't connect to Windows 365 or Azure cloud PCs with it.",
+        ["Microsoft.Windows.DevHome"] = "The Advanced settings page for developers goes away.",
+    };
+
+    public static string? WarningFor(WinAppDef d)
+    {
+        foreach (var raw in d.Appx.Split('|'))
+            if (Warnings.TryGetValue(raw.Trim('*'), out var w)) return w;
+        if (d.Group == "PC maker apps")
+            return "Your PC maker's app. It can handle drivers, firmware, fan or battery settings. Only remove it if you don't use it.";
+        if (d.Tier == RemoveTier.Perm)
+            return "Microsoft no longer offers this, so once it is removed it can't be brought back.";
+        return null;
+    }
 }

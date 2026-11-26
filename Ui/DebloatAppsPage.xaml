@@ -17,8 +17,14 @@
                 <DataTrigger Binding="{Binding TagKind}" Value="core">
                     <Setter Property="Background" Value="{DynamicResource Ink_FF241E10}"/><Setter Property="BorderBrush" Value="{DynamicResource Ink_FF4A3716}"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="warn">
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF241E10}"/><Setter Property="BorderBrush" Value="{DynamicResource Ink_FF4A3716}"/>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="perm">
-                    <Setter Property="Background" Value="{DynamicResource Ink_FF2A1317}"/><Setter Property="BorderBrush" Value="#5A1D27"/>
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF2A1317}"/><Setter Property="BorderBrush" Value="{DynamicResource AccentPanelBorderBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="keep">
+                    <Setter Property="Background" Value="{DynamicResource Ink_FF2A1317}"/><Setter Property="BorderBrush" Value="{DynamicResource AccentPanelBorderBrush}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="done">
                     <Setter Property="Background" Value="{DynamicResource Ink_FF12221A}"/><Setter Property="BorderBrush" Value="{DynamicResource Ink_FF1F4A33}"/>
@@ -31,7 +37,9 @@
             <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding TagKind}" Value="core"><Setter Property="Foreground" Value="{DynamicResource AmberBrush}"/></DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="warn"><Setter Property="Foreground" Value="{DynamicResource AmberBrush}"/></DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="perm"><Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/></DataTrigger>
+                <DataTrigger Binding="{Binding TagKind}" Value="keep"><Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/></DataTrigger>
                 <DataTrigger Binding="{Binding TagKind}" Value="done"><Setter Property="Foreground" Value="{DynamicResource GreenBrush}"/></DataTrigger>
             </Style.Triggers>
         </Style>
@@ -52,12 +60,12 @@
                     <Setter Property="BorderBrush" Value="{DynamicResource AccentEdgeBrush}"/>
                     <Setter Property="Background" Value="{DynamicResource AccentCardWashBrush}"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding Locked}" Value="True"><Setter Property="Cursor" Value="Arrow"/></DataTrigger>
+                <DataTrigger Binding="{Binding Locked}" Value="True"><Setter Property="Cursor" Value="Arrow"/><Setter Property="Opacity" Value="0.72"/></DataTrigger>
             </Style.Triggers>
         </Style>
 
         <DataTemplate DataType="{x:Type ui:WinAppVM}">
-            <Border Style="{StaticResource AppTile}" MouseLeftButtonUp="OnRowClick" ui:Fx.Glow="True" ui:Fx.Rise="True" ToolTip="{Binding Hint}">
+            <Border Style="{StaticResource AppTile}" MouseLeftButtonUp="OnRowClick" ui:Fx.Glow="True" ui:Fx.Rise="True" ToolTip="{Binding Tip}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
@@ -81,7 +89,12 @@
                         </Grid>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="{DynamicResource AmberBrush}" Margin="0,1,6,0"
+                                       VerticalAlignment="Center" Visibility="{Binding HasWarning, Converter={StaticResource B2V}}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        </Grid>
                         <TextBlock Text="{Binding Desc}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                    MaxHeight="30" LineHeight="15" Margin="0,2,0,0"/>
                     </StackPanel>

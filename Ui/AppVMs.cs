@@ -190,8 +190,9 @@ public sealed class PairCardVM : Notify
     public bool Matches(string q) => q.Length == 0 || Title.Contains(q, StringComparison.OrdinalIgnoreCase) || X64.Matches(q);
 }
 
-public sealed class AppSectionVM : Notify
+public sealed class AppSectionVM : Notify, IPackCount
 {
+    public int PackCount => Items.Count;
     string _counter = "";
     public string Title { get; init; } = "";
     public List<object> Items { get; init; } = new();
@@ -209,6 +210,7 @@ public sealed class WinAppVM : Notify
     public WinAppVM(WinAppDef d)
     {
         Def = d;
+        Warning = d.Tier == RemoveTier.Protected ? null : WinAppCatalog.WarningFor(d);
         var (glyph, hex) = WinAppArt.For(d);
         Glyph = glyph;
         var c = (Color)ColorConverter.ConvertFromString(hex);
@@ -245,7 +247,12 @@ public sealed class WinAppVM : Notify
     public Brush Tile { get; }
     public Brush GlyphFg { get; }
     /// <summary>The little label under the tick box is only shown when it matters: core apps, apps that can't come back, locked apps.</summary>
-    public bool ShowTag => _removed || Def.Tier != RemoveTier.Ok;
+    public bool ShowTag => _removed || Def.Tier != RemoveTier.Ok || HasWarning;
+
+    /// <summary>What stops working if this app is removed (null when nothing noticeable does).</summary>
+    public string? Warning { get; }
+    public bool HasWarning => !string.IsNullOrEmpty(Warning);
+    public string Tip => HasWarning ? Hint + "\n\nIf you remove it: " + Warning : Hint;
 
     public string Name => Def.Name;
     public string Desc => Def.Desc;
@@ -271,7 +278,8 @@ public sealed class WinAppVM : Notify
     /// <summary>"reinstall", "core", "perm" or "keep": decides the colour of the tag.</summary>
     public string TagKind => _removed ? "done" : Def.Tier switch
     {
-        RemoveTier.Ok => "reinstall", RemoveTier.Core => "core", RemoveTier.Perm => "perm", RemoveTier.Optional => "optional", _ => "keep",
+        RemoveTier.Ok => HasWarning ? "warn" : "reinstall", RemoveTier.Core => "core", RemoveTier.Perm => "perm",
+        RemoveTier.Optional => HasWarning ? "warn" : "optional", _ => "keep",
     };
 
     public string TagText => _removed ? "Removed" : Def.Tier switch
@@ -286,11 +294,11 @@ public sealed class WinAppVM : Notify
     /// <summary>Short label for the tile; the full wording is in the tooltip.</summary>
     public string ShortTag => _removed ? "Removed" : Def.Tier switch
     {
-        RemoveTier.Ok => "",
+        RemoveTier.Ok => HasWarning ? "Read first" : "",
         RemoveTier.Core => "Core app",
         RemoveTier.Perm => "No reinstall",
-        RemoveTier.Optional => "Optional",
-        _ => "Locked",
+        RemoveTier.Optional => HasWarning ? "Read first" : "Optional",
+        _ => "Do not remove",
     };
 
     public string Hint => Def.Tier switch

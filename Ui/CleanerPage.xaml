@@ -5,29 +5,29 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="B2V"/>
 
-        <!-- one rule inside a category card -->
+        <!-- one cleaning rule: tick, name, what was found, size. The same 64 px row as every list page -->
         <DataTemplate DataType="{x:Type ui:CleanRuleVM}">
-            <Border x:Name="Row" Padding="8,5,6,5" CornerRadius="8" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="OnRuleRowClick">
+            <Border x:Name="Row" Style="{StaticResource RowShell}" Cursor="Hand" MouseLeftButtonUp="OnRuleRowClick" ToolTip="{Binding Name}">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <CheckBox Style="{StaticResource TsCheck}" IsChecked="{Binding Checked, Mode=TwoWay}" IsEnabled="{Binding CanEdit}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="8,0,8,0"
-                               ToolTip="{Binding Name}"/>
-                    <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontSize="11.5" VerticalAlignment="Center">
+                    <CheckBox Style="{StaticResource TsCheck}" IsChecked="{Binding Checked, Mode=TwoWay}" IsEnabled="{Binding CanEdit}" VerticalAlignment="Center" Margin="2,0,14,0"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Sub}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontSize="13" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource FaintBrush}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasFound}" Value="True">
-                                        <Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
-                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsBusy}" Value="True">
-                                        <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentHotBrush}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -36,46 +36,13 @@
                 </Grid>
             </Border>
             <DataTemplate.Triggers>
-                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
-                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource Ink_FF17171D}"/>
-                </Trigger>
                 <DataTrigger Binding="{Binding IsBusy}" Value="True">
-                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentPanelBorderBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Checked}" Value="False">
+                    <Setter TargetName="Row" Property="Opacity" Value="0.6"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
-        </DataTemplate>
-
-        <!-- one category card -->
-        <DataTemplate x:Key="CleanCard" DataType="{x:Type ui:CleanCategoryVM}">
-            <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1" CornerRadius="14" Padding="10,12,10,8"
-                    Margin="0,0,0,12" ui:Fx.Rise="True">
-                <StackPanel>
-                    <Grid Margin="6,0,4,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0">
-                            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource AccentHotBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource FaintBrush}"/>
-                        </StackPanel>
-                        <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}"
-                                   VerticalAlignment="Center" Margin="8,0,10,0"/>
-                        <CheckBox Grid.Column="3" Style="{StaticResource TsCheck}" IsChecked="{Binding AllChecked, Mode=TwoWay}" IsEnabled="{Binding CanEdit}"
-                                  VerticalAlignment="Center" ToolTip="Tick or untick everything in this group"/>
-                    </Grid>
-                    <Rectangle Height="1" Fill="{DynamicResource Ink_FF1E1E25}" Margin="6,0,6,4"/>
-                    <!-- the rules flow across the full width of the card instead of one long column -->
-                    <ItemsControl ItemsSource="{Binding Rules}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><ui:AdaptiveGrid Columns="4" MinItemWidth="250" Gap="6"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -83,109 +50,117 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- header -->
-        <StackPanel Grid.Row="0" Margin="34,4,34,10">
-            <TextBlock Text="TOOLS" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,2"/>
-            <TextBlock Text="PC Cleaner" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
-                       Text="Finds temporary files, caches and leftovers from Windows and the apps on this PC. Only the safe cleaning rules are used, and everything they cover is ticked for you."/>
-        </StackPanel>
+        <!-- header: title left, search right -->
+        <Grid Grid.Row="0" Margin="34,4,34,20">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Bottom" Margin="0,0,20,0">
+                <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentHotBrush}" Margin="0,0,0,3"/>
+                <TextBlock Text="PC Cleaner" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                           Text="Temporary files and caches, found with the safe cleaning rules only. Nothing is deleted until you press Clean."/>
+            </StackPanel>
+            <Grid Grid.Column="1" Width="300" VerticalAlignment="Bottom">
+                <TextBox x:Name="Search" TextChanged="OnSearchChanged" Height="40" Padding="36,0,12,0" VerticalContentAlignment="Center" FontSize="13"
+                         Background="{DynamicResource Ink_FF141418}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}"
+                         CaretBrush="{DynamicResource AccentHotBrush}"/>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SearchHint" Text="Search programs   Ctrl+F" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
+        </Grid>
 
-        <!-- hero: the scan ring, what is happening, and the two buttons -->
-        <Border Grid.Row="1" Margin="34,0,34,12" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
-                CornerRadius="16" Padding="22,18" ClipToBounds="True">
+        <!-- one slim result bar: the figure, what's happening, and the two buttons -->
+        <Border Grid.Row="1" Margin="34,0,34,22" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrushSoft}" BorderThickness="1"
+                CornerRadius="12" Padding="18,14">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-
-                <!-- glow behind the ring -->
-                <Ellipse Width="260" Height="260" Margin="-60,-60,0,-60" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False">
-                    <Ellipse.Fill>
-                        <RadialGradientBrush>
-                            <GradientStop Color="{DynamicResource AccentGlowColor}" Offset="0"/>
-                            <GradientStop Color="{DynamicResource AccentGlowFadeColor}" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Ellipse.Fill>
-                </Ellipse>
-
-                <Grid Width="156" Height="156" VerticalAlignment="Center">
-                    <Ellipse Stroke="{DynamicResource TrackBrush}" StrokeThickness="9" Margin="4"/>
-                    <Path x:Name="Arc" Stroke="{DynamicResource AccentBrush}" StrokeThickness="9" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                        <Path.Effect>
-                            <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="16" ShadowDepth="0" Opacity="0.7"/>
-                        </Path.Effect>
-                    </Path>
-                    <!-- the spinning sweep shown while scanning or cleaning -->
-                    <Ellipse x:Name="Sweep" Margin="4" StrokeThickness="9" Opacity="0" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
-                        <Ellipse.Stroke>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="{DynamicResource InkC_00FFFFFF}" Offset="0"/>
-                                <GradientStop Color="{DynamicResource AccentHotColor}" Offset="0.5"/>
-                                <GradientStop Color="{DynamicResource InkC_00FFFFFF}" Offset="0.51"/>
-                            </LinearGradientBrush>
-                        </Ellipse.Stroke>
-                        <Ellipse.RenderTransform><RotateTransform x:Name="SweepTurn"/></Ellipse.RenderTransform>
-                    </Ellipse>
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock x:Name="BigSize" Text="0 B" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="BigLabel" Text="ready" FontSize="11.5" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center"/>
-                    </StackPanel>
-                </Grid>
-
-                <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center">
-                    <TextBlock x:Name="StateTitle" Text="Ready to scan" FontSize="19" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="StateLine" FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
-                               Text="Press Scan to see how much space can be freed. Nothing is deleted until you press Clean."/>
-                    <ItemsControl x:Name="Chips" Margin="0,12,0,0">
-                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="10" Padding="10,3" Margin="0,0,6,6" Background="{DynamicResource Ink_FF1C1C22}" BorderBrush="{DynamicResource Ink_FF33333C}" BorderThickness="1">
-                                    <TextBlock Text="{Binding}" FontSize="11.5" Foreground="{DynamicResource MutedBrush}"/>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="ScanBtn" Style="{StaticResource PrimaryButton}" MinWidth="130" Click="OnScanClick">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock x:Name="ScanIcon" Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
-                                <TextBlock x:Name="ScanText" Text="Scan"/>
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="CleanBtn" Style="{StaticResource GhostButton}" MinWidth="130" Margin="10,0,0,0" IsEnabled="False" Click="OnCleanClick">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xEA99;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
-                                <TextBlock x:Name="CleanText" Text="Clean"/>
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="ResetBtn" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Content="Tick the safe ones" Click="OnResetTicks"
-                                ToolTip="Ticks every rule again, as it was when the page opened"/>
-                    </StackPanel>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Border Width="48" Height="48" CornerRadius="12" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Text="&#xEA99;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{DynamicResource AccentHotBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis">
+                        <Run x:Name="StateSize" Foreground="{DynamicResource AccentHotBrush}"/><Run x:Name="StateRest" Text="Ready to scan"/>
+                    </TextBlock>
+                    <TextBlock x:Name="StateLine" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                               Text="Press Scan to see how much space can be freed."/>
                 </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="ScanBtn" Style="{StaticResource GhostButton}" Height="40" MinWidth="118" Click="OnScanClick">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="ScanIcon" Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
+                            <TextBlock x:Name="ScanText" Text="Scan"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CleanBtn" Style="{StaticResource PrimaryButton}" Height="40" MinWidth="140" Margin="10,0,0,0" IsEnabled="False" Click="OnCleanClick">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA99;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,8,0"/>
+                            <TextBlock x:Name="CleanText" Text="Clean"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <ProgressBar x:Name="WorkBar" Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource ThinBar}" Height="4" Margin="0,14,0,0" Maximum="1" Visibility="Collapsed"/>
             </Grid>
         </Border>
 
-        <!-- search -->
-        <Grid Grid.Row="2" Margin="34,0,34,10">
-            <TextBox x:Name="Search" TextChanged="OnSearchChanged" Padding="36,9,12,9" FontSize="13" Background="{DynamicResource Ink_FF141418}"
-                     Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource Ink_FF2A2A32}" CaretBrush="{DynamicResource AccentHotBrush}"/>
-            <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="13" IsHitTestVisible="False" Foreground="{DynamicResource FaintBrush}" Margin="13,0,0,0" VerticalAlignment="Center"/>
-            <TextBlock x:Name="SearchHint" Text="Search cleaning rules   (Ctrl+F)" IsHitTestVisible="False" FontSize="13" Foreground="{DynamicResource FaintBrush}" Margin="36,0,0,0" VerticalAlignment="Center"/>
-        </Grid>
+        <Grid Grid.Row="2" Margin="34,0,20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="248"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="34,0,34,20">
-                <TextBlock x:Name="Loading" Text="Finding the programs on this PC…" Foreground="{DynamicResource MutedBrush}" Margin="2,6,0,0"/>
-                <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource CleanCard}"/>
-                <TextBlock Text="Cleaning rules: winapp2.ini (CC BY-SA 4.0)" FontSize="11" Foreground="{DynamicResource Ink_FF4C4C57}" Margin="2,14,0,0"/>
-            </StackPanel>
-        </ScrollViewer>
+            <!-- where the space is: programs, biggest first -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,0,24">
+                    <TextBlock x:Name="RailTitle" Style="{StaticResource RailLabel}" Text="PROGRAMS AND AREAS"/>
+                    <TextBlock x:Name="Loading" Text="Finding the programs on this PC…" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="12,4,0,0"/>
+                    <ItemsControl x:Name="RailList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Style="{StaticResource RailButton}" GroupName="cleanrail" IsChecked="{Binding Selected, Mode=OneWay}" Checked="OnRailPick"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="EmptyToggle" Style="{StaticResource MiniButton}" HorizontalAlignment="Left" Margin="6,6,0,0" Visibility="Collapsed" Click="OnToggleEmptyGroups"/>
+                    <ItemsControl x:Name="EmptyList" Visibility="Collapsed" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Style="{StaticResource RailButton}" GroupName="cleanrail" IsChecked="{Binding Selected, Mode=OneWay}" Checked="OnRailPick" Opacity="0.75"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border BorderBrush="{DynamicResource Ink_FF1E1E25}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="6,12,0,0">
+                        <Button x:Name="ResetBtn" Style="{StaticResource MiniButton}" HorizontalAlignment="Left" Content="Tick every safe rule again" Click="OnResetTicks"
+                                ToolTip="Ticks every rule again, as it was when the page opened"/>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- the chosen program -->
+            <ScrollViewer x:Name="PaneScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,14,24">
+                    <Grid Margin="2,0,0,14">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="PaneTitle" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="PaneSub" Grid.Column="1" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="14,1,12,0" TextTrimming="CharacterEllipsis"/>
+                        <Button x:Name="CleanRulesToggle" Grid.Column="2" Style="{StaticResource MiniButton}" Margin="0,0,14,0" VerticalAlignment="Center" Visibility="Collapsed" Click="OnToggleCleanRules"/>
+                        <CheckBox x:Name="TickAll" Grid.Column="3" Style="{StaticResource TsCheck}" VerticalAlignment="Center" Content="Tick all"
+                                  Foreground="{DynamicResource Ink_FFC4C4CD}" Click="OnTickAll"/>
+                    </Grid>
+                    <TextBlock x:Name="PaneEmpty" FontSize="12.5" Foreground="{DynamicResource MutedBrush}" Margin="2,4,0,0" Visibility="Collapsed"/>
+                    <ItemsControl x:Name="Rules">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><ui:AdaptiveGrid Columns="2" MinItemWidth="380" Gap="10" RowHeight="64"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <TextBlock FontSize="12" Foreground="{DynamicResource FaintBrush}" Margin="2,14,0,0" TextWrapping="Wrap"
+                               Text="Cleaning rules: winapp2.ini safe set (CC BY-SA 4.0). Caches are rebuilt by Windows and your apps when needed."/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>

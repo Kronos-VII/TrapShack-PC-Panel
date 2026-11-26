@@ -24,7 +24,8 @@ Ui/        page list (PageDefs.cs), what "recommended" means (Recommended.cs), v
 ```
 
 ## Pages
-* **Home** (a small start page), **System info** (hardware details, live temperatures) and **Search settings**.
+* **Home** (a small start page), **System info** (hardware details), **Temperatures** (live CPU, GPU and memory with a minute of history) and **Search settings**.
+* **List pages** (Debloat, every Optimizations page, PC Cleaner): the categories are listed on the left with their counts; the chosen category's settings show on the right as 64 px rows in two columns. Search looks through every category.
 * **Utilities**: Windows' own repair tools (DISM then SFC, Windows Update reset, network fixes, drive optimise, Xbox and audio fixes, reports) run in a pop-up terminal that only opens while a tool runs, plus shortcuts to Windows tools. Edit `Core/UtilityCatalog.cs` to add more.
 * **PC Cleaner**: scans for temporary files and caches with the safe winapp2.ini rules, then cleans what you keep ticked (see Assets/Cleaner/LICENSES.txt).
 * **Settings** has a colour wheel for the accent colour (the whole app recolours as you drag), a **Light theme** switch (soft grey, the terminal stays dark),

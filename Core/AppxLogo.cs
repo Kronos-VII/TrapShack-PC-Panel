@@ -59,7 +59,14 @@ public static class AppxLogo
                     && !n.Contains("devicefamily-", StringComparison.OrdinalIgnoreCase);
             })
             .ToList();
-        if (files.Count == 0) return File.Exists(named) ? named : null;
+        if (files.Count == 0)
+        {
+            // only light-theme or colourful variants exist: any variant of this asset is better than no logo
+            files = Directory.GetFiles(dir, stem + "*" + ext)
+                .Where(f => Path.GetFileName(f).StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase)
+                         && !f.Contains("contrast-", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (files.Count == 0) return File.Exists(named) ? named : null;
+        }
 
         int Score(string f)
         {
